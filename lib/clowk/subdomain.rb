@@ -41,10 +41,10 @@ module Clowk
       end
     end
 
-    def initialize(publishable_key: Clowk.config.publishable_key, instance_url: Clowk.config.instance_url, app_base_url: Clowk.config.app_base_url)
-      @publishable_key = publishable_key
-      @instance_url = instance_url
-      @app_base_url = app_base_url
+    def initialize(options = {})
+      @publishable_key = options.fetch(:publishable_key, Clowk.config.publishable_key)
+      @instance_url = options.fetch(:instance_url, Clowk.config.instance_url)
+      @api_base_url = options.fetch(:api_base_url, Clowk.config.api_base_url)
     end
 
     def resolve_url!
@@ -56,7 +56,7 @@ module Clowk
 
     private
 
-    attr_reader :app_base_url, :instance_url, :publishable_key
+    attr_reader :api_base_url, :instance_url, :publishable_key
 
     def resolve_from_key
       cached = self.class.read_cache(cache_key)
@@ -76,7 +76,7 @@ module Clowk
     end
 
     def follow(path, redirects_left = MAX_REDIRECTS)
-      response = sdk.instances.find_by_key(path:)
+      response = client.instances.find_by_key(path:)
       return normalize_resolved_url(path) unless REDIRECT_CODES.include?(response.status)
 
       location = response.headers['location']&.first
@@ -88,10 +88,10 @@ module Clowk
     end
 
     def next_path(current_path, location)
-      current_uri = URI.join("#{app_base_url}/", current_path)
+      current_uri = URI.join("#{api_base_url}/", current_path)
       next_uri = URI.join(current_uri.to_s, location)
 
-      if next_uri.host == URI.parse(app_base_url).host
+      if next_uri.host == URI.parse(api_base_url).host
         next_uri.request_uri.delete_prefix('/')
       else
         next_uri.to_s
@@ -99,10 +99,10 @@ module Clowk
     end
 
     def normalize_resolved_url(path)
-      resolved_uri = URI.join("#{app_base_url}/", path)
+      resolved_uri = URI.join("#{api_base_url}/", path)
 
-      app_base_uri = URI.parse(app_base_url)
-      return normalize_url(instance_url) if instance_url.present? && resolved_uri.host == app_base_uri.host && resolved_uri.path.start_with?('/i/')
+      api_base_uri = URI.parse(api_base_url)
+      return normalize_url(instance_url) if instance_url.present? && resolved_uri.host == api_base_uri.host && resolved_uri.path.start_with?('/i/')
 
       normalized = URI.parse(resolved_uri.to_s)
       normalized.path = ''
@@ -116,8 +116,8 @@ module Clowk
       value.to_s.sub(%r{/$}, '')
     end
 
-    def sdk
-      @sdk ||= Clowk::SDK.new(api_base_url: app_base_url)
+    def client
+      @client ||= Clowk::SDK.new
     end
   end
 end
