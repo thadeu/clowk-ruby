@@ -6,7 +6,7 @@ RSpec.describe Clowk::Subdomain do
   end
 
   it 'uses the publishable_key as the primary resolution source' do
-    sdk = double('Clowk::SDK')
+    sdk = double('Clowk::SDK::Client')
     subdomains = instance_double(Clowk::SDK::Subdomain)
 
     Clowk.configure do |config|
@@ -23,7 +23,7 @@ RSpec.describe Clowk::Subdomain do
       success: true
     )
 
-    allow(Clowk::SDK).to receive(:new).with(no_args).and_return(sdk)
+    allow(Clowk::SDK::Client).to receive(:new).with(no_args).and_return(sdk)
     allow(sdk).to receive(:subdomains).and_return(subdomains)
     allow(subdomains).to receive(:find_by_pk).with('pk_test_123').and_return(instance_response)
 
@@ -36,12 +36,12 @@ RSpec.describe Clowk::Subdomain do
       config.subdomain_url = 'https://acme.clowk.dev/'
     end
 
-    expect(Clowk::SDK).not_to receive(:new)
+    expect(Clowk::SDK::Client).not_to receive(:new)
     expect(described_class.resolve_url!).to eq('https://acme.clowk.dev')
   end
 
   it 'caches the resolved instance url for the configured ttl' do
-    sdk = double('Clowk::SDK')
+    sdk = double('Clowk::SDK::Client')
     subdomains = instance_double(Clowk::SDK::Subdomain)
 
     Clowk.configure do |config|
@@ -57,7 +57,7 @@ RSpec.describe Clowk::Subdomain do
       success: true
     )
 
-    allow(Clowk::SDK).to receive(:new).once.with(no_args).and_return(sdk)
+    allow(Clowk::SDK::Client).to receive(:new).once.with(no_args).and_return(sdk)
 
     allow(sdk).to receive(:subdomains).and_return(subdomains)
     allow(subdomains).to receive(:find_by_pk).with('pk_test_123').once.and_return(instance_response)
@@ -70,7 +70,7 @@ RSpec.describe Clowk::Subdomain do
   end
 
   it 'supports full instance payloads nested under instance' do
-    sdk = double('Clowk::SDK')
+    sdk = double('Clowk::SDK::Client')
     subdomains = instance_double(Clowk::SDK::Subdomain)
 
     Clowk.configure do |config|
@@ -85,7 +85,7 @@ RSpec.describe Clowk::Subdomain do
       success: true
     )
 
-    allow(Clowk::SDK).to receive(:new).with(no_args).and_return(sdk)
+    allow(Clowk::SDK::Client).to receive(:new).with(no_args).and_return(sdk)
     allow(sdk).to receive(:subdomains).and_return(subdomains)
     allow(subdomains).to receive(:find_by_pk).with('pk_test_123').and_return(instance_response)
 

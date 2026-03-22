@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Clowk
-  class SDK
+  module SDK
     class Resource
       def self.resource_path
         raise NotImplementedError, 'resource_path must be implemented'
@@ -11,6 +11,9 @@ module Clowk
         @client = client
       end
 
+      # Usage
+      # client.list
+      # @return [Array<Hash>] list of all resources
       def list
         client.get(self.class.resource_path)
       end
@@ -29,11 +32,17 @@ module Clowk
         client.get("#{self.class.resource_path}/#{id}")
       end
 
+      # Usage
+      # client.show("123")
+      # @return [Hash] resource with the given id
       def show(id:)
         client.get("#{self.class.resource_path}/#{id}")
       end
 
-      def destroy(id:)
+      # Usage
+      # client.destroy("123")
+      # @return [Hash] deleted resource
+      def destroy(id)
         client.delete("#{self.class.resource_path}/#{id}")
       end
 

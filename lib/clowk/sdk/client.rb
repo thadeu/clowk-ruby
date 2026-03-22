@@ -3,7 +3,7 @@
 require 'active_support/inflector'
 
 module Clowk
-  class SDK
+  module SDK
     class Client
       def initialize(options = {})
         @api_base_url = options.fetch(:api_base_url, Clowk.config.api_base_url)
@@ -16,12 +16,12 @@ module Clowk
           ActiveSupport::Inflector.singularize(method_name.to_s)
         )
 
+        return super unless Clowk::SDK.const_defined?(resource_class_name)
+
         resource_ivar = "@#{method_name}"
         return instance_variable_get(resource_ivar) if instance_variable_defined?(resource_ivar)
 
-        return super unless const_defined?(resource_class_name, false)
-
-        resource_class = const_get(resource_class_name)
+        resource_class = Clowk::SDK.const_get(resource_class_name)
         instance_variable_set(resource_ivar, resource_class.new(self))
       end
 
@@ -30,7 +30,7 @@ module Clowk
           ActiveSupport::Inflector.singularize(method_name.to_s)
         )
 
-        const_defined?(resource_class_name, false) || super
+        Clowk::SDK.const_defined?(resource_class_name) || super
       end
 
       def delete(path, body = nil, headers: {})

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe Clowk::SDK do
+RSpec.describe Clowk::SDK::Client do
   subject(:client) do
     described_class.new(
       api_base_url: 'https://api.clowk.dev/client/v1',
@@ -34,10 +34,6 @@ RSpec.describe Clowk::SDK do
       retry_attempts: 2,
       retry_interval: 0.05
     ).and_return(http_client)
-  end
-
-  it 'uses the new SDK as the public client entrypoint' do
-    expect(described_class).to eq(Clowk::SDK)
   end
 
   describe '#users' do
