@@ -174,13 +174,13 @@ module Clowk
       body = response.body.to_s
       parsed = parse_body(body)
 
-      {
+      Response.new(
         status: response.code.to_i,
         body: body,
         body_parsed: parsed,
         headers: response.to_hash,
-        success?: response.is_a?(Net::HTTPSuccess)
-      }
+        success: response.is_a?(Net::HTTPSuccess)
+      )
     end
 
     def parse_body(body)

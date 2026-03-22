@@ -14,6 +14,7 @@ require_relative 'clowk/configuration'
 module Clowk
   class Error < StandardError; end
   class ConfigurationError < Error; end
+  class InvalidStateError < Error; end
   class InvalidTokenError < Error; end
 
   class << self
@@ -32,6 +33,7 @@ module Clowk
 end
 
 require_relative 'clowk/current'
+require_relative 'clowk/http/response'
 require_relative 'clowk/http/logger_middleware'
 require_relative 'clowk/http/retry_middleware'
 require_relative 'clowk/http/timeout_middleware'

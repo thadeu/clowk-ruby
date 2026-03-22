@@ -8,6 +8,7 @@ module Clowk
     attr_accessor :after_sign_out_path
     attr_accessor :callback_path
     attr_accessor :cookie_key
+    attr_accessor :http_logger
     attr_accessor :http_open_timeout
     attr_accessor :http_read_timeout
     attr_accessor :http_retry_attempts
@@ -30,6 +31,7 @@ module Clowk
       @mount_path = '/clowk'
       @callback_path = '/clowk/oauth/callback'
       @cookie_key = 'clowk_token'
+      @http_logger = nil
       @http_open_timeout = 5
       @http_read_timeout = 10
       @http_retry_attempts = 2

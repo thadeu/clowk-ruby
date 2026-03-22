@@ -104,7 +104,8 @@ module Clowk
       cookies[Clowk.config.cookie_key] = {
         value: token,
         httponly: true,
-        same_site: :lax
+        same_site: :lax,
+        secure: request.ssl?
       }
     end
   end

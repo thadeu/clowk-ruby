@@ -11,13 +11,22 @@ RSpec.describe Clowk::Http do
   end
 
   let(:http) { instance_double('Net::HTTP') }
+  let(:empty_success_response) do
+    Clowk::Http::Response.new(
+      status: 200,
+      body: '',
+      body_parsed: {},
+      headers: {},
+      success: true
+    )
+  end
 
   describe '.post' do
     it 'supports the class-level helper' do
       instance = instance_double(described_class)
 
       allow(described_class).to receive(:new).with(base_url: 'https://api.clowk.dev/client/v1', headers: { 'X-Test-Header' => 'abc123' }, logger: nil).and_return(instance)
-      allow(instance).to receive(:post).with('tokens/verify', { token: 'jwt_token' }).and_return(status: 200, body: '', body_parsed: {}, success?: true)
+      allow(instance).to receive(:post).with('tokens/verify', { token: 'jwt_token' }).and_return(empty_success_response)
 
       result = described_class.post(
         base_url: 'https://api.clowk.dev/client/v1',
@@ -26,7 +35,7 @@ RSpec.describe Clowk::Http do
         headers: { 'X-Test-Header' => 'abc123' }
       )
 
-      expect(result).to eq(status: 200, body: '', body_parsed: {}, success?: true)
+      expect(result).to eq(empty_success_response)
     end
   end
 
@@ -35,7 +44,7 @@ RSpec.describe Clowk::Http do
       instance = instance_double(described_class)
 
       allow(described_class).to receive(:new).with(base_url: 'https://api.clowk.dev/client/v1', headers: { 'X-Test-Header' => 'abc123' }, logger: nil).and_return(instance)
-      allow(instance).to receive(:get).with('users/user_123').and_return(status: 200, body: '', body_parsed: {}, success?: true)
+      allow(instance).to receive(:get).with('users/user_123').and_return(empty_success_response)
 
       result = described_class.get(
         base_url: 'https://api.clowk.dev/client/v1',
@@ -43,7 +52,7 @@ RSpec.describe Clowk::Http do
         headers: { 'X-Test-Header' => 'abc123' }
       )
 
-      expect(result).to eq(status: 200, body: '', body_parsed: {}, success?: true)
+      expect(result).to eq(empty_success_response)
     end
   end
 
@@ -52,7 +61,7 @@ RSpec.describe Clowk::Http do
       instance = instance_double(described_class)
 
       allow(described_class).to receive(:new).with(base_url: 'https://api.clowk.dev/client/v1', headers: { 'X-Test-Header' => 'abc123' }, logger: nil).and_return(instance)
-      allow(instance).to receive(:put).with('users/user_123', { name: 'Jane' }).and_return(status: 200, body: '', body_parsed: {}, success?: true)
+      allow(instance).to receive(:put).with('users/user_123', { name: 'Jane' }).and_return(empty_success_response)
 
       result = described_class.put(
         base_url: 'https://api.clowk.dev/client/v1',
@@ -61,7 +70,7 @@ RSpec.describe Clowk::Http do
         headers: { 'X-Test-Header' => 'abc123' }
       )
 
-      expect(result).to eq(status: 200, body: '', body_parsed: {}, success?: true)
+      expect(result).to eq(empty_success_response)
     end
   end
 
@@ -86,7 +95,10 @@ RSpec.describe Clowk::Http do
 
       result = http_client.get('users/user_123')
 
-      expect(result).to eq(status: 200, body: '{"id":"user_123"}', body_parsed: { 'id' => 'user_123' }, headers: {}, success?: true)
+      expect(result.status).to eq(200)
+      expect(result.body_parsed).to eq({ 'id' => 'user_123' })
+      expect(result.headers).to eq({})
+      expect(result).to be_success
     end
   end
 
@@ -109,7 +121,10 @@ RSpec.describe Clowk::Http do
 
       result = http_client.post('tokens/verify', { token: 'jwt_token' })
 
-      expect(result).to eq(status: 200, body: '{"valid":true}', body_parsed: { 'valid' => true }, headers: {}, success?: true)
+      expect(result.status).to eq(200)
+      expect(result.body).to eq('{"valid":true}')
+      expect(result.body_parsed).to eq({ 'valid' => true })
+      expect(result).to be_success
     end
   end
 
@@ -132,7 +147,9 @@ RSpec.describe Clowk::Http do
 
       result = http_client.put('users/user_123', { name: 'Jane' })
 
-      expect(result).to eq(status: 200, body: '{"updated":true}', body_parsed: { 'updated' => true }, headers: {}, success?: true)
+      expect(result.status).to eq(200)
+      expect(result.body_parsed).to eq({ 'updated' => true })
+      expect(result).to be_success
     end
   end
 
@@ -154,7 +171,9 @@ RSpec.describe Clowk::Http do
 
       result = http_client.delete('users/user_123')
 
-      expect(result).to eq(status: 204, body: '', body_parsed: {}, headers: {}, success?: true)
+      expect(result.status).to eq(204)
+      expect(result.body_parsed).to eq({})
+      expect(result).to be_success
     end
   end
 
@@ -176,7 +195,9 @@ RSpec.describe Clowk::Http do
 
       result = http_client.head('users/user_123')
 
-      expect(result).to eq(status: 200, body: '', body_parsed: {}, headers: { 'etag' => ['abc'] }, success?: true)
+      expect(result.status).to eq(200)
+      expect(result.headers).to eq({ 'etag' => ['abc'] })
+      expect(result).to be_success
     end
   end
 
@@ -198,7 +219,9 @@ RSpec.describe Clowk::Http do
 
       result = http_client.options('users')
 
-      expect(result).to eq(status: 200, body: '', body_parsed: {}, headers: { 'allow' => ['GET,POST,PUT,DELETE'] }, success?: true)
+      expect(result.status).to eq(200)
+      expect(result.headers).to eq({ 'allow' => ['GET,POST,PUT,DELETE'] })
+      expect(result).to be_success
     end
   end
 
@@ -216,7 +239,10 @@ RSpec.describe Clowk::Http do
 
       result = http_client.post('tokens/verify', { token: 'jwt_token' })
 
-      expect(result).to eq(status: 400, body: 'invalid request', body_parsed: nil, headers: {}, success?: false)
+      expect(result.status).to eq(400)
+      expect(result.body).to eq('invalid request')
+      expect(result.body_parsed).to be_nil
+      expect(result).not_to be_success
     end
   end
 
@@ -265,7 +291,9 @@ RSpec.describe Clowk::Http do
 
       result = http_client.get('users/user_123')
 
-      expect(result).to eq(status: 200, body: '{"ok":true}', body_parsed: { 'ok' => true }, headers: {}, success?: true)
+      expect(result.status).to eq(200)
+      expect(result.body_parsed).to eq({ 'ok' => true })
+      expect(result).to be_success
     end
   end
 
@@ -291,7 +319,32 @@ RSpec.describe Clowk::Http do
 
       result = custom_http.get('users/user_123')
 
-      expect(result).to eq(status: 200, body: '', body_parsed: {}, headers: {}, success?: true)
+      expect(result.status).to eq(200)
+      expect(result.body_parsed).to eq({})
+      expect(result).to be_success
+    end
+  end
+
+  describe Clowk::Http::Response do
+    it 'exposes a stable API and remains hash-compatible' do
+      response = described_class.new(
+        status: 201,
+        body: '{"id":"user_123"}',
+        body_parsed: { 'id' => 'user_123' },
+        headers: { 'location' => ['/users/user_123'] },
+        success: true
+      )
+
+      expect(response.status).to eq(201)
+      expect(response.body_parsed['id']).to eq('user_123')
+      expect(response[:success?]).to eq(true)
+      expect(response.to_h).to eq(
+        status: 201,
+        body: '{"id":"user_123"}',
+        body_parsed: { 'id' => 'user_123' },
+        headers: { 'location' => ['/users/user_123'] },
+        success?: true
+      )
     end
   end
 end

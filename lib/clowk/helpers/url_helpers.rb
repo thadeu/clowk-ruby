@@ -17,22 +17,22 @@ module Clowk
         append_query(clowk_local_path('/sign_out'), return_to:)
       end
 
-      def clowk_callback_url(return_to: nil)
-        append_query("#{request.base_url}#{Clowk.config.callback_path}", return_to:)
+      def clowk_callback_url(return_to: nil, state: nil)
+        append_query("#{request.base_url}#{Clowk.config.callback_path}", return_to:, state:)
       end
 
-      def clowk_sign_in_url(redirect_to: nil, return_to: nil)
-        clowk_remote_auth_url('sign-in', redirect_to:, return_to:)
+      def clowk_sign_in_url(redirect_to: nil, return_to: nil, state: nil)
+        clowk_remote_auth_url('sign-in', redirect_to:, return_to:, state:)
       end
 
-      def clowk_sign_up_url(redirect_to: nil, return_to: nil)
-        clowk_remote_auth_url('sign-up', redirect_to:, return_to:)
+      def clowk_sign_up_url(redirect_to: nil, return_to: nil, state: nil)
+        clowk_remote_auth_url('sign-up', redirect_to:, return_to:, state:)
       end
 
       private
 
-      def clowk_remote_auth_url(action, redirect_to:, return_to:)
-        callback_url = clowk_callback_url(return_to: redirect_to || return_to)
+      def clowk_remote_auth_url(action, redirect_to:, return_to:, state:)
+        callback_url = clowk_callback_url(return_to: redirect_to || return_to, state:)
         query = { redirect_uri: callback_url }
 
         append_query("#{clowk_instance_base_url}/#{action}", query)

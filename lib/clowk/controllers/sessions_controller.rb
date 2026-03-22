@@ -3,11 +3,15 @@
 module Clowk
   class SessionsController < BaseController
     def new
-      redirect_to clowk_sign_in_url(redirect_to: params[:return_to]), allow_other_host: true
+      state = start_clowk_auth_flow!(return_to: params[:return_to])
+
+      redirect_to clowk_sign_in_url(state:), allow_other_host: true
     end
 
     def sign_up
-      redirect_to clowk_sign_up_url(redirect_to: params[:return_to]), allow_other_host: true
+      state = start_clowk_auth_flow!(return_to: params[:return_to])
+
+      redirect_to clowk_sign_up_url(state:), allow_other_host: true
     end
 
     def destroy

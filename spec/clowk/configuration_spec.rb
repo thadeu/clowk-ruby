@@ -12,6 +12,7 @@ RSpec.describe Clowk::Configuration do
   end
 
   it 'defaults the http timeouts and retries' do
+    expect(configuration.http_logger).to be_nil
     expect(configuration.http_open_timeout).to eq(5)
     expect(configuration.http_read_timeout).to eq(10)
     expect(configuration.http_write_timeout).to eq(10)

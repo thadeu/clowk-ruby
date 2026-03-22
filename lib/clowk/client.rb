@@ -37,6 +37,14 @@ module Clowk
         http.put(path, body, headers:)
       end
 
+      def head(path, headers: {})
+        http.head(path, headers:)
+      end
+
+      def options(path, headers: {})
+        http.options(path, headers:)
+      end
+
       private
 
       attr_reader :api_base_url, :publishable_key, :secret_key
@@ -45,6 +53,7 @@ module Clowk
         @http ||= Clowk::Http.new(
           base_url: api_base_url,
           headers: default_headers,
+          logger: Clowk.config.http_logger,
           open_timeout: Clowk.config.http_open_timeout,
           read_timeout: Clowk.config.http_read_timeout,
           write_timeout: Clowk.config.http_write_timeout,
@@ -61,4 +70,6 @@ module Clowk
       end
     end
   end
+
+  SDK = Client::SDK
 end

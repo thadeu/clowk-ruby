@@ -1,58 +1,47 @@
 # Clowk Rails
 
-Ruby gem for integrating Clowk authentication into Rails applications.
+Clowk Rails is the Ruby gem for integrating Clowk authentication into Rails applications.
 
-The goal is the same developer experience that made Clerk popular, but with a Rails-native integration: simple setup, server-side JWT verification, and helpers that feel natural inside a Rails app.
+It focuses on a small client-side surface:
 
-## What this gem does
+- redirect users to Clowk
+- verify the JWT returned by Clowk
+- expose Rails-friendly auth helpers
+- provide a minimal HTTP client for the Clowk API
 
-- Verify HS256 JWTs issued by Clowk
-- Validate token expiration and signature with your instance `secret_key`
-- Expose Rails helpers such as `current_clowk` and `authenticate_clowk!`
-- Extract the token from query params, cookies, or the `Authorization` header
-- Build sign-in and sign-up URLs for your Clowk instance
+## Product domains
 
-## Clowk domains
+Clowk uses different domains for different concerns:
 
-Clowk uses different domains for different parts of the product:
+- `clowk.in`: public product site
+- `app.clowk.in`: dashboard used to manage apps and instances
+- `*.clowk.dev`: per-instance auth domain used by your end users
 
-- `clowk.in`: marketing and public site
-- `app.clowk.in`: dashboard where your customer creates apps, instances, and configures auth
-- `*.clowk.dev`: unique auth domain for each customer instance, where end users actually sign in
+For a Rails app using this gem, the important part is the instance auth domain. Your app redirects users there, Clowk authenticates them, then redirects back with a signed JWT.
 
-For the Rails app using this gem, the important part is simple: your users authenticate on your instance domain on `clowk.dev`, and your app receives a signed JWT back.
+## Install
 
-## Auth flow
-
-1. Your Rails app redirects the user to your instance sign-in URL on `*.clowk.dev`
-2. The user authenticates on Clowk with OAuth or email/password
-3. Clowk redirects back to your `redirect_uri` with `?token=eyJ...`
-4. This gem verifies the JWT using your instance `secret_key`
-5. The authenticated user payload becomes available in Rails through `current_clowk`
+```ruby
+# Gemfile
+gem 'clowk'
+```
 
 ## Quick start
 
 ```ruby
 # config/initializers/clowk.rb
 Clowk.configure do |config|
-  config.secret_key = ENV["CLOWK_SECRET_KEY"]
-  config.publishable_key = ENV["CLOWK_PUBLISHABLE_KEY"]
-  config.instance_url = ENV["CLOWK_INSTANCE_URL"]
+  config.secret_key = ENV['CLOWK_SECRET_KEY']
+  config.publishable_key = ENV['CLOWK_PUBLISHABLE_KEY']
+  config.instance_url = ENV['CLOWK_INSTANCE_URL']
   config.prefix_by = :clowk
 end
 ```
 
-| Key | Description |
-|-----|-------------|
-| `secret_key` | Instance secret key (`sk_...`). Required. Used to verify JWT signatures. |
-| `publishable_key` | Instance publishable key (`pk_...`). Optional. Used to build auth URLs through `app.clowk.in`. |
-| `instance_url` | Optional explicit auth domain, such as `https://acme.clowk.dev`. |
-| `prefix_by` | Prefix used to generate auth helper methods. Default is `:clowk`. |
-
 ```ruby
 # config/routes.rb
 Rails.application.routes.draw do
-  mount Clowk::Engine => "/clowk"
+  mount Clowk::Engine => '/clowk'
 end
 ```
 
@@ -67,14 +56,87 @@ class DashboardController < ApplicationController
   before_action :authenticate_clowk!
 
   def index
-    @user = current_clowk
+    @subject = current_clowk
   end
 end
 ```
 
-## Custom helper names
+## Authentication flow
 
-If you want to avoid collisions with Devise or other auth libraries, you can change the helper prefix:
+1. Your app redirects the user to `*.clowk.dev`.
+2. Clowk authenticates the user.
+3. Clowk redirects back to your callback URL with `token` and `state`.
+4. The gem validates `state`, verifies the JWT, stores the authenticated session, and redirects back to a safe internal path.
+
+The callback flow includes:
+
+- session-backed `state` validation
+- JWT verification with your instance `secret_key`
+- internal-only redirect sanitization
+- session reset before persisting the authenticated user
+- `httponly` cookie persistence with `SameSite=Lax`
+
+## Configuration
+
+```ruby
+Clowk.configure do |config|
+  config.secret_key = ENV['CLOWK_SECRET_KEY']
+  config.publishable_key = ENV['CLOWK_PUBLISHABLE_KEY']
+  config.instance_url = 'https://acme.clowk.dev'
+  config.prefix_by = :clowk
+
+  config.after_sign_in_path = '/'
+  config.after_sign_out_path = '/'
+
+  config.api_base_url = 'https://api.clowk.dev/client/v1'
+  config.callback_path = '/clowk/oauth/callback'
+  config.mount_path = '/clowk'
+
+  config.http_open_timeout = 5
+  config.http_read_timeout = 10
+  config.http_write_timeout = 10
+  config.http_retry_attempts = 2
+  config.http_retry_interval = 0.05
+  config.http_logger = Rails.logger
+end
+```
+
+Important settings:
+
+| Setting | Purpose |
+| --- | --- |
+| `secret_key` | Required. Used to verify JWT signatures. |
+| `publishable_key` | Optional. Used when building auth URLs through the Clowk app/API side. |
+| `instance_url` | Optional explicit auth domain, such as `https://acme.clowk.dev`. |
+| `prefix_by` | Prefix used to generate helper names. Default: `:clowk`. |
+| `mount_path` | Local mount prefix used by helper path generation. Default: `/clowk`. |
+| `callback_path` | Callback route Clowk redirects back to. Default: `/clowk/oauth/callback`. |
+| `http_logger` | Optional logger used by `Clowk::Http`. |
+
+If you mount the engine under a different prefix, keep `mount_path` and `callback_path` aligned with that choice.
+
+Example:
+
+```ruby
+Clowk.configure do |config|
+  config.mount_path = '/auth'
+  config.callback_path = '/auth/oauth/callback'
+end
+
+Rails.application.routes.draw do
+  mount Clowk::Engine => '/auth'
+end
+```
+
+## Generated helpers
+
+With the default `prefix_by = :clowk`, the concern exposes:
+
+- `current_clowk`
+- `authenticate_clowk!`
+- `clowk_signed_in?`
+
+You can change the prefix to avoid collisions with another auth system.
 
 ```ruby
 Clowk.configure do |config|
@@ -82,145 +144,159 @@ Clowk.configure do |config|
 end
 ```
 
-That gives you:
+That generates:
 
 - `current_member`
 - `authenticate_member!`
 - `member_signed_in?`
 
-## What `current_clowk` contains
+## Current subject
 
-After a valid token is processed, the user payload is available in your controllers.
+`current_clowk` returns a `Clowk::Current` object.
 
 ```ruby
-current_clowk
-# => {
-#   id: "uuid",
-#   email: "user@example.com",
-#   name: "John Doe",
-#   avatar_url: "https://...",
-#   provider: "google"
-# }
+current_clowk.id
+current_clowk.email
+current_clowk.name
+current_clowk.avatar_url
+current_clowk.provider
+current_clowk.instance_id
+current_clowk.app_id
 ```
 
-Depending on the token payload, Clowk may also include internal identifiers such as the instance and app ids.
+You can also access raw claims:
+
+```ruby
+current_clowk[:sub]
+current_clowk.to_h
+```
 
 ## Route protection
 
 ```ruby
 class AdminController < ApplicationController
-  include Clowk::Authenticable
-
   before_action :authenticate_clowk!
 end
 ```
 
-Use `authenticate_clowk!` when the route requires a valid authenticated user. Use `current_clowk` when the route can be public but should still know who is signed in.
+Use `authenticate_clowk!` for protected pages. Use `current_clowk` when the route can be public but should still know who is authenticated.
 
-When the user is not authenticated, the concern redirects to the local engine route on `/clowk/sign_in`, which then redirects to your Clowk instance and uses `/clowk/oauth/callback` to receive the JWT back.
+## View and URL helpers
 
-## View helpers
-
-```erb
-<%= link_to "Sign in", clowk_sign_in_path(return_to: dashboard_path) %>
-<%= link_to "Sign up", clowk_sign_up_path(return_to: dashboard_path) %>
-```
-
-If you want the direct remote URLs instead of the local mounted routes:
+Local mounted routes:
 
 ```erb
-<%= link_to "Direct sign in", clowk_sign_in_url(redirect_to: dashboard_url) %>
-<%= link_to "Direct sign up", clowk_sign_up_url(redirect_to: dashboard_url) %>
+<%= link_to 'Sign in', clowk_sign_in_path(return_to: dashboard_path) %>
+<%= link_to 'Sign up', clowk_sign_up_path(return_to: dashboard_path) %>
+<%= link_to 'Sign out', clowk_sign_out_path %>
 ```
 
-The helpers are meant to keep the integration small on the client side: configure your keys, mount the engine, redirect to Clowk, verify the token, and use `current_clowk`.
+Direct remote URLs:
 
-## Callback flow
+```erb
+<%= link_to 'Direct sign in', clowk_sign_in_url(redirect_to: dashboard_url) %>
+<%= link_to 'Direct sign up', clowk_sign_up_url(redirect_to: dashboard_url) %>
+```
 
-Once the engine is mounted, the gem exposes these routes:
+Mounted routes exposed by the engine:
 
 - `/clowk/sign_in`
 - `/clowk/sign_up`
 - `/clowk/sign_out`
 - `/clowk/oauth/callback`
 
-The callback validates the JWT, stores it in the Rails session, persists the raw token in a cookie, and redirects back to the original `return_to` path.
+When you mount the engine elsewhere, the same route set is exposed under your chosen prefix.
 
-## API client
+## Token sources
 
-The gem also ships with a small SDK client for the future Clowk API.
-
-```ruby
-sdk = Clowk::Client::SDK.new
-
-result = sdk.verify_token(token: params[:token])
-result[:success?] # => true
-result[:body]     # => parsed JSON response
-```
-
-There is also a convenience alias if you prefer a shorter name:
-
-```ruby
-sdk = Clowk::SDK.new
-user = sdk.user("user_123")
-```
-
-## Request sources
-
-The gem can read the token from:
+The concern can read the token from:
 
 - `params[:token]`
 - cookies
 - `Authorization: Bearer <token>`
 
-This makes it work for classic Rails controllers, callback flows, and API endpoints without extra glue code.
+That keeps the integration usable for callback routes, regular controllers, and API-style endpoints.
 
-## Intended scope
+## API client
 
-This gem is intentionally narrow. It is not an auth server and it does not try to own your full session architecture.
+The gem includes a small client for Clowk API requests.
 
-It focuses on the client side of the integration:
+```ruby
+client = Clowk::Client::SDK.new
 
-- receive the token from Clowk
-- verify it safely
-- expose a clean Rails API
+response = client.verify_token(token: params[:token])
 
-## Gem structure
-
-```
-clowk-rails/
-├── config/
-│   └── routes.rb
-├── lib/
-│   └── clowk/
-│       ├── configuration.rb
-│       ├── current.rb
-│       ├── client.rb
-│       ├── jwt_verifier.rb
-│       ├── authenticable.rb
-│       ├── engine.rb
-│       ├── controllers/
-│       ├── helpers/
-│       └── middleware/
-├── lib/clowk.rb
-├── clowk.gemspec
-└── README.md
+response.status
+response.success?
+response.body
+response.body_parsed
+response.headers
 ```
 
-## Companion SDKs
+There is also a short alias:
 
-Clowk can also be consumed from JavaScript and TypeScript apps through the `clowk-js` SDKs, while this gem focuses on the Rails experience.
+```ruby
+client = Clowk::SDK.new
+user = client.user('user_123')
+```
 
----
+Supported instance methods:
 
-## Contributing
+- `get`
+- `post`
+- `put`
+- `patch`
+- `delete`
+- `head`
+- `options`
+- `verify_token`
+- `user`
 
-Contributions are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
+## `Clowk::Http::Response`
 
----
+HTTP responses are returned as `Clowk::Http::Response` objects.
+
+```ruby
+response = client.get('users/user_123')
+
+response.status       # => 200
+response.success?     # => true
+response.body         # => '{"id":"user_123"}'
+response.body_parsed  # => { 'id' => 'user_123' }
+response.headers      # => { 'content-type' => ['application/json'] }
+```
+
+For compatibility, the response also supports:
+
+```ruby
+response[:status]
+response[:success?]
+response.to_h
+```
+
+## HTTP middleware
+
+`Clowk::Http` uses a small internal middleware stack built on `Net::HTTP`.
+
+Included behavior:
+
+- request and response logging
+- open, read, and write timeouts
+- retry on retryable network errors
+- automatic JSON request encoding
+- automatic `body_parsed` JSON decoding when possible
+
+## Scope
+
+This gem is intentionally narrow. It does not try to replace your entire app session architecture or act as an auth server.
+
+Its job is to make the Rails side of Clowk integration predictable:
+
+- start authentication
+- validate callbacks safely
+- expose a clean authenticated subject
+- make future Clowk API access straightforward
 
 ## License
 
-[GNU Affero General Public License v3.0](./LICENSE) — AGPL-3.0
-
-If you run a modified version of Clowk as a network service, you must make your source code available to users of that service.
+MIT. See `LICENSE`.
