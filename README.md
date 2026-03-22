@@ -1,6 +1,6 @@
-# Clowk Rails
+# Clowk Ruby SDK
 
-Clowk Rails is the Ruby gem for integrating Clowk authentication into Rails applications.
+Clowk is the Ruby gem for integrating Clowk authentication into Rails applications.
 
 It focuses on a small client-side surface:
 
