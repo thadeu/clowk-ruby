@@ -31,10 +31,8 @@ gem 'clowk'
 ```ruby
 # config/initializers/clowk.rb
 Clowk.configure do |config|
-  config.secret_key = ENV['CLOWK_SECRET_KEY']
   config.publishable_key = ENV['CLOWK_PUBLISHABLE_KEY']
-  config.subdomain_url = ENV['CLOWK_SUBDOMAIN_URL']
-  config.prefix_by = :clowk
+  config.secret_key = ENV['CLOWK_SECRET_KEY']
 end
 ```
 
@@ -56,7 +54,7 @@ class DashboardController < ApplicationController
   before_action :authenticate_clowk!
 
   def index
-    @subject = current_clowk
+    @user = current_clowk
   end
 end
 ```
@@ -120,7 +118,7 @@ Auth URL resolution priority:
 
 When `publishable_key` is present, the gem resolves the current auth base URL first and caches it briefly in memory. The lookup endpoint returns the full instance JSON payload, and the gem derives the final auth URL from that data (including `subdomain`). This keeps dashboard subdomain changes visible without redeploying the client app. If you do not want that lookup, configure only `subdomain_url`.
 
-Internally, that lookup is done through `Clowk::SDK` and the gem HTTP client, via `sdk.subdomains.find_by_pk(key: ...)`.
+Internally, that lookup is done through `Clowk::SDK::Client`, via `client.subdomains.find_by_pk('pk_...')`.
 
 If you mount the engine under a different prefix, keep `mount_path` and `callback_path` aligned with that choice.
 
@@ -228,52 +226,94 @@ The concern can read the token from:
 
 That keeps the integration usable for callback routes, regular controllers, and API-style endpoints.
 
-## API client
+## SDK Client
 
-The gem includes a small client for Clowk API requests.
+The gem includes a resource-oriented SDK for the Clowk API.
 
 ```ruby
-client = Clowk::SDK.new
+client = Clowk::SDK::Client.new
+```
 
+The client uses your global configuration by default. You can also pass options explicitly:
+
+```ruby
+client = Clowk::SDK::Client.new(
+  secret_key: 'sk_live_xxx',
+  publishable_key: 'pk_live_xxx'
+)
+```
+
+### Resources
+
+Each resource is accessible as a method on the client:
+
+```ruby
+client.users
+client.sessions
+client.subdomains
+```
+
+These return `Clowk::SDK::Resource` subclasses with a standard CRUD interface:
+
+```ruby
+client.users.list
+client.users.find('user_123')
+client.users.show('user_123')
+client.users.destroy('user_123')
+```
+
+### Token verification
+
+```ruby
 response = client.tokens.verify(token: params[:token])
 
-response.status
-response.success?
-response.body
-response.body_parsed
-response.headers
+response.status       # => 200
+response.success?     # => true
+response.body_parsed  # => { 'valid' => true }
 ```
 
-Resource usage:
+### Subdomain resolution
 
 ```ruby
-client = Clowk::SDK.new
-user = client.users.find('user_123')
-subdomain = client.subdomains.find_by_pk(key: 'pk_live_123')
+response = client.subdomains.find_by_pk('pk_live_xxx')
 ```
 
-The SDK organizes resources through `Clowk::SDK::Resource` subclasses:
+### Search operators
 
-- `users`
-- `subdomains`
-- `sessions`
-- `tokens`
+The `search` method uses a Zendesk-style query syntax. You can use keyword arguments or a raw string for advanced operators.
 
-The client API stays minimal and resource-oriented.
+**Keywords:**
 
-Supported instance methods:
+```ruby
+client.users.search(email: "user@example.com")
+# GET /users/search?query=email%3Auser%40example.com
 
-- `get`
-- `post`
-- `put`
-- `patch`
-- `delete`
-- `head`
-- `options`
-- `users`
-- `subdomains`
-- `sessions`
-- `tokens`
+client.users.search(status: "active", role: "admin")
+# GET /users/search?query=status%3Aactive+role%3Aadmin
+```
+
+**Raw string** for custom operators like `>`, `<`, `>=`:
+
+```ruby
+client.users.search("email:user@example.com active:true created_at>2026-01-01")
+# GET /users/search?query=email%3Auser%40example.com+active%3Atrue+created_at%3E2026-01-01
+```
+
+The raw string is sent as-is, giving full control over the query syntax. The API backend parses and applies the operators.
+
+### Raw HTTP methods
+
+The client also exposes raw HTTP methods for custom requests:
+
+```ruby
+client.get('custom/endpoint')
+client.post('custom/endpoint', { key: 'value' })
+client.put('custom/endpoint', { key: 'value' })
+client.patch('custom/endpoint', { key: 'value' })
+client.delete('custom/endpoint')
+client.head('custom/endpoint')
+client.options('custom/endpoint')
+```
 
 ## `Clowk::Http::Response`
 

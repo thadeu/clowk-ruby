@@ -20,14 +20,21 @@ module Clowk
         client.get(self.class.resource_path)
       end
 
-      # @example
-      #   client.subdomains.search(publishable_key: "pk_test_123", status: "active")
-      #   # GET /instances/search?query=publishable_key:pk_test_123 status:active
+      # @example keywords
+      #   client.users.search(email: "user@example.com", status: "active")
+      #   # GET /users/search?query=email%3Auser%40example.com+status%3Aactive
       #
-      # @param filters [Hash] key-value pairs to build the query
+      # @example raw string
+      #   client.users.search("email:user@example.com active:true created_at>2026-01-01")
+      #   # GET /users/search?query=email%3Auser%40example.com+active%3Atrue+created_at%3E2026-01-01
+      #
       # @return [Clowk::Http::Response]
-      def search(**filters)
-        query = filters.map { |k, v| "#{k}:#{v}" }.join(' ')
+      def search(raw_query = nil, **filters)
+        query = if raw_query.is_a?(String)
+                  raw_query
+                else
+                  filters.map { |k, v| "#{k}:#{v}" }.join(' ')
+                end
 
         client.get("#{self.class.resource_path}/search?query=#{ERB::Util.url_encode(query)}")
       end
@@ -42,7 +49,7 @@ module Clowk
       # Usage
       # client.show("123")
       # @return [Hash] resource with the given id
-      def show(id:)
+      def show(id)
         client.get("#{self.class.resource_path}/#{id}")
       end
 
