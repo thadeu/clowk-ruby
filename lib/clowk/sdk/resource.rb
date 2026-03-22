@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'erb'
+
 module Clowk
   module SDK
     class Resource
@@ -18,11 +20,16 @@ module Clowk
         client.get(self.class.resource_path)
       end
 
-      # Usage
-      # client.search("publishable_key_eq=pk_test_123")
-      # @return [Array<Hash>] list of resources matching the query
-      def search(query)
-        client.get("#{self.class.resource_path}/search?q=#{query}")
+      # @example
+      #   client.subdomains.search(publishable_key: "pk_test_123", status: "active")
+      #   # GET /instances/search?query=publishable_key:pk_test_123 status:active
+      #
+      # @param filters [Hash] key-value pairs to build the query
+      # @return [Clowk::Http::Response]
+      def search(**filters)
+        query = filters.map { |k, v| "#{k}:#{v}" }.join(' ')
+
+        client.get("#{self.class.resource_path}/search?query=#{ERB::Util.url_encode(query)}")
       end
 
       # Usage

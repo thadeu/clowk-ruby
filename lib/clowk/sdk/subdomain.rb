@@ -10,7 +10,7 @@ module Clowk
       def find_by_pk(key = nil)
         return if key.blank?
 
-        client.search("publishable_key_eq=#{key}")
+        search(publishable_key: key)
       end
     end
   end
