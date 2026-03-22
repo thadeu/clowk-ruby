@@ -47,3 +47,4 @@
 
 
 *.log
+.rspec_status
