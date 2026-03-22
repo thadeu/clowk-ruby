@@ -6,43 +6,34 @@ RSpec.describe Clowk::Subdomain do
   end
 
   it 'uses the publishable_key as the primary resolution source' do
-    sdk = instance_double(Clowk::SDK)
-    instances = instance_double(Clowk::Client::SDK::Resourceable::InstancesResource)
+    sdk = double('Clowk::SDK')
+    subdomains = instance_double(Clowk::SDK::Subdomain)
 
     Clowk.configure do |config|
       config.publishable_key = 'pk_test_123'
-      config.instance_url = 'https://hardcoded.clowk.dev'
+      config.subdomain_url = 'https://hardcoded.clowk.dev'
       config.api_base_url = 'https://api.clowk.in/client/v1'
     end
 
-    redirect_response = Clowk::Http::Response.new(
-      status: 302,
-      body: '',
-      body_parsed: {},
-      headers: { 'location' => ['https://latest.clowk.dev'] },
-      success: false
-    )
-
-    resolved_response = Clowk::Http::Response.new(
+    instance_response = Clowk::Http::Response.new(
       status: 200,
       body: '',
-      body_parsed: {},
+      body_parsed: { 'subdomain' => 'latest' },
       headers: {},
       success: true
     )
 
     allow(Clowk::SDK).to receive(:new).with(no_args).and_return(sdk)
-    allow(sdk).to receive(:instances).and_return(instances)
-    allow(instances).to receive(:find_by_key).with(path: 'i/pk_test_123').and_return(redirect_response)
-    allow(instances).to receive(:find_by_key).with(path: 'https://latest.clowk.dev').and_return(resolved_response)
+    allow(sdk).to receive(:subdomains).and_return(subdomains)
+    allow(subdomains).to receive(:find_by_pk).with('pk_test_123').and_return(instance_response)
 
     expect(described_class.resolve_url!).to eq('https://latest.clowk.dev')
   end
 
-  it 'falls back to the configured instance_url when publishable_key is absent' do
+  it 'falls back to the configured subdomain_url when publishable_key is absent' do
     Clowk.configure do |config|
       config.publishable_key = nil
-      config.instance_url = 'https://acme.clowk.dev/'
+      config.subdomain_url = 'https://acme.clowk.dev/'
     end
 
     expect(Clowk::SDK).not_to receive(:new)
@@ -50,40 +41,54 @@ RSpec.describe Clowk::Subdomain do
   end
 
   it 'caches the resolved instance url for the configured ttl' do
-    sdk = instance_double(Clowk::SDK)
-    instances = instance_double(Clowk::Client::SDK::Resourceable::InstancesResource)
+    sdk = double('Clowk::SDK')
+    subdomains = instance_double(Clowk::SDK::Subdomain)
 
     Clowk.configure do |config|
       config.publishable_key = 'pk_test_123'
       config.api_base_url = 'https://api.clowk.in/client/v1'
     end
 
-    redirect_response = Clowk::Http::Response.new(
-      status: 302,
-      body: '',
-      body_parsed: {},
-      headers: { 'location' => ['https://cached.clowk.dev'] },
-      success: false
-    )
-
-    resolved_response = Clowk::Http::Response.new(
+    instance_response = Clowk::Http::Response.new(
       status: 200,
       body: '',
-      body_parsed: {},
+      body_parsed: { 'subdomain' => 'cached' },
       headers: {},
       success: true
     )
 
     allow(Clowk::SDK).to receive(:new).once.with(no_args).and_return(sdk)
 
-    allow(sdk).to receive(:instances).and_return(instances)
-    allow(instances).to receive(:find_by_key).with(path: 'i/pk_test_123').once.and_return(redirect_response)
-    allow(instances).to receive(:find_by_key).with(path: 'https://cached.clowk.dev').once.and_return(resolved_response)
+    allow(sdk).to receive(:subdomains).and_return(subdomains)
+    allow(subdomains).to receive(:find_by_pk).with('pk_test_123').once.and_return(instance_response)
 
     first = described_class.resolve_url!
     second = described_class.resolve_url!
 
     expect(first).to eq('https://cached.clowk.dev')
     expect(second).to eq('https://cached.clowk.dev')
+  end
+
+  it 'supports full instance payloads nested under instance' do
+    sdk = double('Clowk::SDK')
+    subdomains = instance_double(Clowk::SDK::Subdomain)
+
+    Clowk.configure do |config|
+      config.publishable_key = 'pk_test_123'
+    end
+
+    instance_response = Clowk::Http::Response.new(
+      status: 200,
+      body: '',
+      body_parsed: { 'instance' => { 'subdomain' => 'nested' } },
+      headers: {},
+      success: true
+    )
+
+    allow(Clowk::SDK).to receive(:new).with(no_args).and_return(sdk)
+    allow(sdk).to receive(:subdomains).and_return(subdomains)
+    allow(subdomains).to receive(:find_by_pk).with('pk_test_123').and_return(instance_response)
+
+    expect(described_class.resolve_url!).to eq('https://nested.clowk.dev')
   end
 end

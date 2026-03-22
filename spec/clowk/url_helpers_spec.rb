@@ -30,7 +30,7 @@ RSpec.describe Clowk::Helpers::UrlHelpers do
 
   it "uses the callback URL when building the remote sign in URL" do
     Clowk.configure do |config|
-      config.instance_url = "https://acme.clowk.dev"
+      config.subdomain_url = "https://acme.clowk.dev"
     end
 
     instance = helper_host.new(request)
@@ -40,10 +40,10 @@ RSpec.describe Clowk::Helpers::UrlHelpers do
     )
   end
 
-  it 'prioritizes publishable_key resolution over a hardcoded instance_url' do
+  it 'prioritizes publishable_key resolution over a hardcoded subdomain_url' do
     Clowk.configure do |config|
       config.publishable_key = 'pk_test_123'
-      config.instance_url = 'https://hardcoded.clowk.dev'
+      config.subdomain_url = 'https://hardcoded.clowk.dev'
     end
 
     instance = helper_host.new(request)

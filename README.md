@@ -33,7 +33,7 @@ gem 'clowk'
 Clowk.configure do |config|
   config.secret_key = ENV['CLOWK_SECRET_KEY']
   config.publishable_key = ENV['CLOWK_PUBLISHABLE_KEY']
-  config.instance_url = ENV['CLOWK_INSTANCE_URL']
+  config.subdomain_url = ENV['CLOWK_SUBDOMAIN_URL']
   config.prefix_by = :clowk
 end
 ```
@@ -82,7 +82,7 @@ The callback flow includes:
 Clowk.configure do |config|
   config.secret_key = ENV['CLOWK_SECRET_KEY']
   config.publishable_key = ENV['CLOWK_PUBLISHABLE_KEY']
-  config.instance_url = 'https://acme.clowk.dev'
+  config.subdomain_url = 'https://acme.clowk.dev'
   config.prefix_by = :clowk
 
   config.after_sign_in_path = '/'
@@ -107,7 +107,7 @@ Important settings:
 | --- | --- |
 | `secret_key` | Required. Used to verify JWT signatures. |
 | `publishable_key` | Preferred for auth URL resolution. The gem resolves the latest instance URL from it before sign in/sign up. |
-| `instance_url` | Fallback auth domain when you do not want publishable-key-based resolution. |
+| `subdomain_url` | Fallback auth domain when you do not want publishable-key-based resolution. |
 | `prefix_by` | Prefix used to generate helper names. Default: `:clowk`. |
 | `mount_path` | Local mount prefix used by helper path generation. Default: `/clowk`. |
 | `callback_path` | Callback route Clowk redirects back to. Default: `/clowk/oauth/callback`. |
@@ -116,11 +116,11 @@ Important settings:
 Auth URL resolution priority:
 
 1. `publishable_key`
-2. `instance_url`
+2. `subdomain_url`
 
-When `publishable_key` is present, the gem resolves the current auth base URL first and caches it briefly in memory. This keeps dashboard subdomain changes visible without redeploying the client app. If you do not want that lookup, configure only `instance_url`.
+When `publishable_key` is present, the gem resolves the current auth base URL first and caches it briefly in memory. The lookup endpoint returns the full instance JSON payload, and the gem derives the final auth URL from that data (including `subdomain`). This keeps dashboard subdomain changes visible without redeploying the client app. If you do not want that lookup, configure only `subdomain_url`.
 
-Internally, that lookup is done through `Clowk::SDK` and the gem HTTP client, via `sdk.instances.find_by_key(...)`.
+Internally, that lookup is done through `Clowk::SDK` and the gem HTTP client, via `sdk.subdomains.find_by_pk(key: ...)`.
 
 If you mount the engine under a different prefix, keep `mount_path` and `callback_path` aligned with that choice.
 
@@ -207,7 +207,7 @@ Direct remote URLs:
 <%= link_to 'Direct sign up', clowk_sign_up_url(redirect_to: dashboard_url) %>
 ```
 
-When `publishable_key` is configured, these helpers resolve the latest instance URL before building the final `sign-in` or `sign-up` destination. When it is absent, they use `instance_url` directly.
+When `publishable_key` is configured, these helpers resolve the latest instance URL before building the final `sign-in` or `sign-up` destination. When it is absent, they use `subdomain_url` directly.
 
 Mounted routes exposed by the engine:
 
@@ -233,9 +233,9 @@ That keeps the integration usable for callback routes, regular controllers, and 
 The gem includes a small client for Clowk API requests.
 
 ```ruby
-client = Clowk::Client::SDK.new
+client = Clowk::SDK.new
 
-response = client.verify_token(token: params[:token])
+response = client.tokens.verify(token: params[:token])
 
 response.status
 response.success?
@@ -244,22 +244,22 @@ response.body_parsed
 response.headers
 ```
 
-There is also a short alias:
+Resource usage:
 
 ```ruby
 client = Clowk::SDK.new
 user = client.users.find('user_123')
-instance = client.instances.find_by_key(key: 'pk_live_123')
+subdomain = client.subdomains.find_by_pk(key: 'pk_live_123')
 ```
 
-The SDK organizes resources through `Clowk::SDK::Resourceable`:
+The SDK organizes resources through `Clowk::SDK::Resource` subclasses:
 
 - `users`
-- `instances`
-- `webhooks`
+- `subdomains`
 - `sessions`
+- `tokens`
 
-Convenience shortcuts can still exist for common paths, such as `client.user('user_123')`, but the resource-oriented API is the main structure.
+The client API stays minimal and resource-oriented.
 
 Supported instance methods:
 
@@ -270,12 +270,10 @@ Supported instance methods:
 - `delete`
 - `head`
 - `options`
-- `verify_token`
-- `user`
 - `users`
-- `instances`
-- `webhooks`
+- `subdomains`
 - `sessions`
+- `tokens`
 
 ## `Clowk::Http::Response`
 

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe Clowk::Client::SDK do
+RSpec.describe Clowk::SDK do
   subject(:client) do
     described_class.new(
       api_base_url: 'https://api.clowk.dev/client/v1',
@@ -36,16 +36,44 @@ RSpec.describe Clowk::Client::SDK do
     ).and_return(http_client)
   end
 
-  it 'keeps Clowk::SDK as a public alias' do
-    expect(Clowk::SDK).to eq(described_class)
+  it 'uses the new SDK as the public client entrypoint' do
+    expect(described_class).to eq(Clowk::SDK)
   end
 
-  it 'exposes the resource layer through Clowk::SDK::Resourceable' do
-    expect(Clowk::SDK::Resourceable).to eq(Clowk::Client::SDK::Resourceable)
+  describe '#users' do
+    it 'provides a users resource' do
+      allow(http_client).to receive(:get).with('users/user_123', headers: {}).and_return(response)
+
+      resource_result = client.users.find('user_123')
+
+      expect(resource_result).to eq(response)
+    end
   end
 
-  describe '#verify_token' do
-    it 'delegates token verification to the internal http client' do
+  describe '#sessions' do
+    it 'exposes a sessions resource' do
+      expect(client.sessions).to be_a(Clowk::SDK::Session)
+    end
+  end
+
+  describe '#subdomains' do
+    it 'exposes a subdomains resource' do
+      expect(client.subdomains).to be_a(Clowk::SDK::Subdomain)
+    end
+  end
+
+  describe '#users' do
+    it 'exposes a users resource' do
+      expect(client.users).to be_a(Clowk::SDK::User)
+    end
+  end
+
+  describe '#tokens' do
+    it 'exposes a tokens resource' do
+      expect(client.tokens).to be_a(Clowk::SDK::Token)
+    end
+
+    it 'supports token verification through the token resource' do
       token_response = Clowk::Http::Response.new(
         status: 200,
         body: '{"valid":true}',
@@ -56,64 +84,11 @@ RSpec.describe Clowk::Client::SDK do
 
       allow(http_client).to receive(:post).with('tokens/verify', { token: 'jwt_token' }, headers: {}).and_return(token_response)
 
-      result = client.verify_token(token: 'jwt_token')
+      result = client.tokens.verify(token: 'jwt_token')
 
       expect(result).to eq(token_response)
       expect(result.body_parsed).to eq({ 'valid' => true })
       expect(result).to be_success
-    end
-  end
-
-  describe '#user' do
-    it 'delegates get requests to the internal http client' do
-      user_response = Clowk::Http::Response.new(
-        status: 200,
-        body: '{"id":"user_123"}',
-        body_parsed: { 'id' => 'user_123' },
-        headers: {},
-        success: true
-      )
-
-      allow(http_client).to receive(:get).with('users/user_123', headers: {}).and_return(user_response)
-
-      result = client.user('user_123')
-
-      expect(result).to eq(user_response)
-      expect(result.body_parsed['id']).to eq('user_123')
-    end
-  end
-
-  describe '#instances' do
-    it 'provides a collection helper that can find an instance by key' do
-      allow(http_client).to receive(:get).with('i/pk_test_123', headers: {}).and_return(response)
-
-      result = client.instances.find_by_key(key: 'pk_test_123')
-
-      expect(result).to eq(response)
-    end
-  end
-
-  describe '#users' do
-    it 'provides a users resource and preserves the user shortcut' do
-      allow(http_client).to receive(:get).with('users/user_123', headers: {}).and_return(response)
-
-      resource_result = client.users.find('user_123')
-      shortcut_result = client.user('user_123')
-
-      expect(resource_result).to eq(response)
-      expect(shortcut_result).to eq(response)
-    end
-  end
-
-  describe '#webhooks' do
-    it 'exposes a future-facing webhooks resource' do
-      expect(client.webhooks).to be_a(Clowk::Client::SDK::Resourceable::WebhooksResource)
-    end
-  end
-
-  describe '#sessions' do
-    it 'exposes a future-facing sessions resource' do
-      expect(client.sessions).to be_a(Clowk::Client::SDK::Resourceable::SessionsResource)
     end
   end
 
@@ -216,7 +191,7 @@ RSpec.describe Clowk::Client::SDK do
       ).and_return(http_client)
       allow(http_client).to receive(:get).with('users/user_123', headers: {}).and_return(response)
 
-      client.user('user_123')
+      client.users.find('user_123')
 
       expect(Clowk::Http).to have_received(:new)
     end

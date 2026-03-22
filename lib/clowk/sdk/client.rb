@@ -1,18 +1,36 @@
 # frozen_string_literal: true
 
-module Clowk
-  module Client
-    class SDK
-      include Resourceable
+require 'active_support/inflector'
 
+module Clowk
+  class SDK
+    class Client
       def initialize(options = {})
         @api_base_url = options.fetch(:api_base_url, Clowk.config.api_base_url)
         @secret_key = options.fetch(:secret_key, Clowk.config.secret_key)
         @publishable_key = options.fetch(:publishable_key, Clowk.config.publishable_key)
       end
 
-      def verify_token(token:)
-        post('tokens/verify', { token: token })
+      def method_missing(method_name, *, **, &)
+        resource_class_name = ActiveSupport::Inflector.camelize(
+          ActiveSupport::Inflector.singularize(method_name.to_s)
+        )
+
+        resource_ivar = "@#{method_name}"
+        return instance_variable_get(resource_ivar) if instance_variable_defined?(resource_ivar)
+
+        return super unless const_defined?(resource_class_name, false)
+
+        resource_class = const_get(resource_class_name)
+        instance_variable_set(resource_ivar, resource_class.new(self))
+      end
+
+      def respond_to_missing?(method_name, include_private = false)
+        resource_class_name = ActiveSupport::Inflector.camelize(
+          ActiveSupport::Inflector.singularize(method_name.to_s)
+        )
+
+        const_defined?(resource_class_name, false) || super
       end
 
       def delete(path, body = nil, headers: {})
@@ -68,6 +86,4 @@ module Clowk
       end
     end
   end
-
-  SDK = Client::SDK
 end

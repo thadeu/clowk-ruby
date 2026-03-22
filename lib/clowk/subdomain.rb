@@ -5,8 +5,7 @@ require 'uri'
 module Clowk
   class Subdomain
     CACHE_TTL = 60
-    REDIRECT_CODES = [301, 302, 303, 307, 308].freeze
-    MAX_REDIRECTS = 5
+    DEFAULT_SUBDOMAIN_BASE = 'clowk.dev'
 
     class << self
       def resolve_url!(...)
@@ -43,26 +42,30 @@ module Clowk
 
     def initialize(options = {})
       @publishable_key = options.fetch(:publishable_key, Clowk.config.publishable_key)
-      @instance_url = options.fetch(:instance_url, Clowk.config.instance_url)
       @api_base_url = options.fetch(:api_base_url, Clowk.config.api_base_url)
+      @subdomain_url = options.fetch(:subdomain_url, Clowk.config.subdomain_url)
     end
 
     def resolve_url!
       return resolve_from_key if publishable_key.present?
-      return normalize_url(instance_url) if instance_url.present?
+      return normalize_url(subdomain_url) if subdomain_url.present?
 
-      raise ConfigurationError, 'set publishable_key or instance_url to build Clowk URLs'
+      raise ConfigurationError, 'set publishable_key or subdomain_url to build Clowk URLs'
     end
 
     private
 
-    attr_reader :api_base_url, :instance_url, :publishable_key
+    attr_reader :api_base_url, :publishable_key, :subdomain_url
 
     def resolve_from_key
       cached = self.class.read_cache(cache_key)
       return cached if cached
 
-      resolved = follow(locator_path)
+      response = client.subdomains.find_by_pk(publishable_key)
+      resolved = extract_url_from_instance(response.body_parsed)
+
+      raise ConfigurationError, 'could not resolve subdomain_url from publishable_key' if resolved.blank?
+
       self.class.write_cache(cache_key, resolved, ttl: CACHE_TTL)
       resolved
     end
@@ -71,45 +74,39 @@ module Clowk
       "instance-url:#{publishable_key}"
     end
 
-    def locator_path
-      "i/#{publishable_key}"
+    def extract_url_from_instance(payload)
+      return if payload.blank?
+
+      instance = payload.is_a?(Hash) ? payload : {}
+      instance_data = instance['instance'].is_a?(Hash) ? instance['instance'] : instance
+
+      explicit_url = instance_data['url'] || instance_data['subdomain_url'] || instance_data['instance_url']
+      return normalize_url(explicit_url) if explicit_url.present?
+
+      host = instance_data['host'] || instance_data['domain'] || instance_data['hostname']
+      return normalize_url(host_to_url(host)) if host.present?
+
+      subdomain = instance_data['subdomain']
+      normalize_url("https://#{subdomain}.#{default_subdomain_base}") if subdomain.present?
     end
 
-    def follow(path, redirects_left = MAX_REDIRECTS)
-      response = client.instances.find_by_key(path:)
-      return normalize_resolved_url(path) unless REDIRECT_CODES.include?(response.status)
+    def host_to_url(host)
+      value = host.to_s
+      return value if value.start_with?('http://', 'https://')
 
-      location = response.headers['location']&.first
-
-      raise ConfigurationError, 'could not resolve instance_url from publishable_key' if location.blank?
-      raise ConfigurationError, 'too many redirects resolving instance_url' if redirects_left <= 0
-
-      follow(next_path(path, location), redirects_left - 1)
+      "https://#{value}"
     end
 
-    def next_path(current_path, location)
-      current_uri = URI.join("#{api_base_url}/", current_path)
-      next_uri = URI.join(current_uri.to_s, location)
+    def default_subdomain_base
+      configured = subdomain_url.to_s.strip
+      return DEFAULT_SUBDOMAIN_BASE if configured.empty?
 
-      if next_uri.host == URI.parse(api_base_url).host
-        next_uri.request_uri.delete_prefix('/')
-      else
-        next_uri.to_s
-      end
-    end
+      uri = URI.parse(configured)
+      return DEFAULT_SUBDOMAIN_BASE if uri.host.blank?
 
-    def normalize_resolved_url(path)
-      resolved_uri = URI.join("#{api_base_url}/", path)
-
-      api_base_uri = URI.parse(api_base_url)
-      return normalize_url(instance_url) if instance_url.present? && resolved_uri.host == api_base_uri.host && resolved_uri.path.start_with?('/i/')
-
-      normalized = URI.parse(resolved_uri.to_s)
-      normalized.path = ''
-      normalized.query = nil
-      normalized.fragment = nil
-
-      normalize_url(normalized.to_s)
+      uri.host.split('.').drop(1).join('.')
+    rescue URI::InvalidURIError
+      DEFAULT_SUBDOMAIN_BASE
     end
 
     def normalize_url(value)
@@ -117,7 +114,7 @@ module Clowk
     end
 
     def client
-      @client ||= Clowk::SDK.new
+      @client ||= Clowk::SDK::Client.new
     end
   end
 end

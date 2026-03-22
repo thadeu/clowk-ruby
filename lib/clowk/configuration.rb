@@ -14,13 +14,13 @@ module Clowk
     attr_accessor :http_retry_attempts
     attr_accessor :http_retry_interval
     attr_accessor :http_write_timeout
-    attr_accessor :instance_url
     attr_accessor :issuer
     attr_accessor :mount_path
     attr_accessor :publishable_key
     attr_accessor :prefix_by
     attr_accessor :secret_key
     attr_accessor :session_key
+    attr_accessor :subdomain_url
     attr_accessor :token_param
 
     def initialize
