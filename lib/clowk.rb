@@ -27,6 +27,7 @@ module Clowk
     end
 
     def reset!
+      Subdomain.clear_cache! if defined?(Subdomain)
       @config = Configuration.new
     end
   end
@@ -38,7 +39,9 @@ require_relative 'clowk/http/logger_middleware'
 require_relative 'clowk/http/retry_middleware'
 require_relative 'clowk/http/timeout_middleware'
 require_relative 'clowk/http/client'
+require_relative 'clowk/subdomain'
 require_relative 'clowk/jwt_verifier'
+require_relative 'clowk/sdk/resourceable'
 require_relative 'clowk/helpers/url_helpers'
 require_relative 'clowk/middleware/token_extractor'
 require_relative 'clowk/authenticable'

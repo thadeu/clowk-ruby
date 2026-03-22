@@ -40,6 +40,10 @@ RSpec.describe Clowk::Client::SDK do
     expect(Clowk::SDK).to eq(described_class)
   end
 
+  it 'exposes the resource layer through Clowk::SDK::Resourceable' do
+    expect(Clowk::SDK::Resourceable).to eq(Clowk::Client::SDK::Resourceable)
+  end
+
   describe '#verify_token' do
     it 'delegates token verification to the internal http client' do
       token_response = Clowk::Http::Response.new(
@@ -76,6 +80,40 @@ RSpec.describe Clowk::Client::SDK do
 
       expect(result).to eq(user_response)
       expect(result.body_parsed['id']).to eq('user_123')
+    end
+  end
+
+  describe '#instances' do
+    it 'provides a collection helper that can find an instance by key' do
+      allow(http_client).to receive(:get).with('i/pk_test_123', headers: {}).and_return(response)
+
+      result = client.instances.find_by_key(key: 'pk_test_123')
+
+      expect(result).to eq(response)
+    end
+  end
+
+  describe '#users' do
+    it 'provides a users resource and preserves the user shortcut' do
+      allow(http_client).to receive(:get).with('users/user_123', headers: {}).and_return(response)
+
+      resource_result = client.users.find('user_123')
+      shortcut_result = client.user('user_123')
+
+      expect(resource_result).to eq(response)
+      expect(shortcut_result).to eq(response)
+    end
+  end
+
+  describe '#webhooks' do
+    it 'exposes a future-facing webhooks resource' do
+      expect(client.webhooks).to be_a(Clowk::Client::SDK::Resourceable::WebhooksResource)
+    end
+  end
+
+  describe '#sessions' do
+    it 'exposes a future-facing sessions resource' do
+      expect(client.sessions).to be_a(Clowk::Client::SDK::Resourceable::SessionsResource)
     end
   end
 

@@ -39,11 +39,7 @@ module Clowk
       end
 
       def clowk_instance_base_url
-        return Clowk.config.instance_url if Clowk.config.instance_url.present?
-
-        return "#{Clowk.config.app_base_url}/i/#{Clowk.config.publishable_key}" if Clowk.config.publishable_key.present?
-
-        raise ConfigurationError, 'set instance_url or publishable_key to build Clowk URLs'
+        Clowk::Subdomain.resolve_url!
       end
 
       def clowk_local_path(path)

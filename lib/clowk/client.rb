@@ -3,18 +3,16 @@
 module Clowk
   module Client
     class SDK
-      def initialize(api_base_url: Clowk.config.api_base_url, secret_key: Clowk.config.secret_key, publishable_key: Clowk.config.publishable_key)
-        @api_base_url = api_base_url
-        @secret_key = secret_key
-        @publishable_key = publishable_key
+      include Resourceable
+
+      def initialize(options = {})
+        @api_base_url = options.fetch(:api_base_url, Clowk.config.api_base_url)
+        @secret_key = options.fetch(:secret_key, Clowk.config.secret_key)
+        @publishable_key = options.fetch(:publishable_key, Clowk.config.publishable_key)
       end
 
       def verify_token(token:)
         post('tokens/verify', { token: token })
-      end
-
-      def user(id)
-        get("users/#{id}")
       end
 
       def delete(path, body = nil, headers: {})

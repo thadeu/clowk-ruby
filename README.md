@@ -106,12 +106,21 @@ Important settings:
 | Setting | Purpose |
 | --- | --- |
 | `secret_key` | Required. Used to verify JWT signatures. |
-| `publishable_key` | Optional. Used when building auth URLs through the Clowk app/API side. |
-| `instance_url` | Optional explicit auth domain, such as `https://acme.clowk.dev`. |
+| `publishable_key` | Preferred for auth URL resolution. The gem resolves the latest instance URL from it before sign in/sign up. |
+| `instance_url` | Fallback auth domain when you do not want publishable-key-based resolution. |
 | `prefix_by` | Prefix used to generate helper names. Default: `:clowk`. |
 | `mount_path` | Local mount prefix used by helper path generation. Default: `/clowk`. |
 | `callback_path` | Callback route Clowk redirects back to. Default: `/clowk/oauth/callback`. |
 | `http_logger` | Optional logger used by `Clowk::Http`. |
+
+Auth URL resolution priority:
+
+1. `publishable_key`
+2. `instance_url`
+
+When `publishable_key` is present, the gem resolves the current auth base URL first and caches it briefly in memory. This keeps dashboard subdomain changes visible without redeploying the client app. If you do not want that lookup, configure only `instance_url`.
+
+Internally, that lookup is done through `Clowk::SDK` and the gem HTTP client, via `sdk.instances.find_by_key(...)`.
 
 If you mount the engine under a different prefix, keep `mount_path` and `callback_path` aligned with that choice.
 
@@ -198,6 +207,8 @@ Direct remote URLs:
 <%= link_to 'Direct sign up', clowk_sign_up_url(redirect_to: dashboard_url) %>
 ```
 
+When `publishable_key` is configured, these helpers resolve the latest instance URL before building the final `sign-in` or `sign-up` destination. When it is absent, they use `instance_url` directly.
+
 Mounted routes exposed by the engine:
 
 - `/clowk/sign_in`
@@ -237,8 +248,18 @@ There is also a short alias:
 
 ```ruby
 client = Clowk::SDK.new
-user = client.user('user_123')
+user = client.users.find('user_123')
+instance = client.instances.find_by_key(key: 'pk_live_123')
 ```
+
+The SDK organizes resources through `Clowk::SDK::Resourceable`:
+
+- `users`
+- `instances`
+- `webhooks`
+- `sessions`
+
+Convenience shortcuts can still exist for common paths, such as `client.user('user_123')`, but the resource-oriented API is the main structure.
 
 Supported instance methods:
 
@@ -251,6 +272,10 @@ Supported instance methods:
 - `options`
 - `verify_token`
 - `user`
+- `users`
+- `instances`
+- `webhooks`
+- `sessions`
 
 ## `Clowk::Http::Response`
 
