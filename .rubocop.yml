@@ -1,0 +1,126 @@
+Style/Documentation:
+  Enabled: false
+
+Style/DocumentationMethod:
+  Enabled: false
+
+Style/SingleLineMethods:
+  Enabled: false
+
+Style/LambdaCall:
+  Enabled: false
+
+Style/Lambda:
+  Enabled: false
+
+Style/AccessorGrouping:
+  Enabled: false
+
+Metrics/ClassLength:
+  Enabled: false
+
+Metrics/CyclomaticComplexity:
+  Enabled: false
+
+Metrics/PerceivedComplexity:
+  Enabled: false
+
+Metrics/ModuleLength:
+  Enabled: false
+
+Metrics/MethodLength:
+  Enabled: false
+  Max: 15
+
+Style/ArrayJoin:
+  Enabled: false
+
+Metrics/AbcSize:
+  Enabled: false
+
+Style/NumberedParameters:
+  Enabled: false
+
+Style/NumberedParametersLimit:
+  Max: 4
+
+Style/RedundantDoubleSplatHashBraces:
+  Enabled: false
+
+Layout/LineLength:
+  Max: 150
+
+Layout/FirstArrayElementIndentation:
+  Enabled: false
+
+Layout/MultilineMethodCallIndentation:
+  Enabled: false
+
+Style/MutableConstant:
+  Enabled: true
+
+Layout/FirstHashElementIndentation:
+  Enabled: false
+
+Naming/MethodName:
+  Enabled: false
+
+Style/ClassAndModuleChildren:
+  Enabled: false
+
+Style/FrozenStringLiteralComment:
+  Enabled: true
+  SafeAutoCorrect: true
+  Exclude:
+    - bin/**/*
+    - config/application.rb
+    - config/boot.rb
+    - config/environment.rb
+    - config/environments/*
+    - config/puma.rb
+    - config.ru
+    - Gemfile
+    - Rakefile
+
+AllCops:
+  DisabledByDefault: false
+  NewCops: enable
+  TargetRubyVersion: 3.3
+  Exclude:
+    - 'spec/factories/*.rb'
+    - 'db/schema.rb'
+
+Lint/AmbiguousBlockAssociation:
+  Enabled: false
+  Exclude:
+    - 'spec/**/*.rb'
+
+Metrics/BlockLength:
+  Enabled: false
+  Exclude:
+    - 'app/admin/**/*.rb'
+    - 'spec/**/*.rb'
+
+Style/PercentLiteralDelimiters:
+  PreferredDelimiters:
+    '%i': '()'
+
+Style/ModuleFunction:
+  Enabled: false
+
+Lint/DeprecatedConstants:
+  Enabled: true
+
+Lint/MissingSuper:
+  Enabled: false
+
+Style/TrailingWhitespace:
+  Enabled: true
+
+Layout/ExtraSpacing:
+  Enabled: true
+  AllowForAlignment: false
+
+Layout/ArgumentAlignment:
+  Enabled: false
+  EnforcedStyle: with_fixed_indentation
