@@ -24,6 +24,10 @@ Dashboard at: https://clowk.in/dashboard
 - Create code context-based separating using breakline
 - DONT CREATE COMMENT in our code, just only if needed to documentation method or class usando RDOC ou YARD
 
+## Changes
+
+- Always update CHANGELOG.md when version will change
+
 ## Data model
 
 ```
