@@ -325,6 +325,117 @@ RSpec.describe Clowk::Http do
     end
   end
 
+  describe 'timeout errors' do
+    it 'raises Net::OpenTimeout when connection times out' do
+      allow(Net::HTTP).to receive(:start).and_raise(Net::OpenTimeout)
+
+      expect { http_client.get('users/user_123') }.to raise_error(Net::OpenTimeout)
+    end
+
+    it 'raises Net::ReadTimeout after exhausting retries' do
+      allow(Net::HTTP).to receive(:start).with('api.clowk.dev', 443, use_ssl: true).and_yield(http)
+      allow(http).to receive(:open_timeout=)
+      allow(http).to receive(:read_timeout=)
+      allow(http).to receive(:write_timeout=)
+      allow(http).to receive(:request).and_raise(Net::ReadTimeout)
+      allow_any_instance_of(Clowk::Http::RetryMiddleware).to receive(:sleep)
+
+      expect { http_client.get('users/user_123') }.to raise_error(Net::ReadTimeout)
+    end
+  end
+
+  describe 'HTTP 5xx responses' do
+    it 'returns a failed response for 500 Internal Server Error' do
+      response = Net::HTTPInternalServerError.new('1.1', '500', 'Internal Server Error')
+      allow(response).to receive(:body).and_return('{"error":"something went wrong"}')
+      allow(response).to receive(:to_hash).and_return({})
+
+      allow(Net::HTTP).to receive(:start).with('api.clowk.dev', 443, use_ssl: true).and_yield(http)
+      allow(http).to receive(:open_timeout=)
+      allow(http).to receive(:read_timeout=)
+      allow(http).to receive(:write_timeout=)
+      allow(http).to receive(:request).and_return(response)
+
+      result = http_client.get('users/user_123')
+
+      expect(result.status).to eq(500)
+      expect(result.body_parsed).to eq({ 'error' => 'something went wrong' })
+      expect(result).not_to be_success
+    end
+
+    it 'returns a failed response for 502 Bad Gateway' do
+      response = Net::HTTPBadGateway.new('1.1', '502', 'Bad Gateway')
+      allow(response).to receive(:body).and_return('<html>Bad Gateway</html>')
+      allow(response).to receive(:to_hash).and_return({})
+
+      allow(Net::HTTP).to receive(:start).with('api.clowk.dev', 443, use_ssl: true).and_yield(http)
+      allow(http).to receive(:open_timeout=)
+      allow(http).to receive(:read_timeout=)
+      allow(http).to receive(:write_timeout=)
+      allow(http).to receive(:request).and_return(response)
+
+      result = http_client.get('users/user_123')
+
+      expect(result.status).to eq(502)
+      expect(result.body_parsed).to be_nil
+      expect(result).not_to be_success
+    end
+
+    it 'returns a failed response for 503 Service Unavailable' do
+      response = Net::HTTPServiceUnavailable.new('1.1', '503', 'Service Unavailable')
+      allow(response).to receive(:body).and_return('')
+      allow(response).to receive(:to_hash).and_return({ 'retry-after' => ['30'] })
+
+      allow(Net::HTTP).to receive(:start).with('api.clowk.dev', 443, use_ssl: true).and_yield(http)
+      allow(http).to receive(:open_timeout=)
+      allow(http).to receive(:read_timeout=)
+      allow(http).to receive(:write_timeout=)
+      allow(http).to receive(:request).and_return(response)
+
+      result = http_client.get('users/user_123')
+
+      expect(result.status).to eq(503)
+      expect(result.headers['retry-after']).to eq(['30'])
+      expect(result).not_to be_success
+    end
+  end
+
+  describe 'response body size limit' do
+    it 'raises Clowk::Error when response body exceeds MAX_BODY_SIZE' do
+      oversized_body = 'x' * (Clowk::Http::MAX_BODY_SIZE + 1)
+
+      response = Net::HTTPSuccess.new('1.1', '200', 'OK')
+      allow(response).to receive(:body).and_return(oversized_body)
+      allow(response).to receive(:to_hash).and_return({})
+
+      allow(Net::HTTP).to receive(:start).with('api.clowk.dev', 443, use_ssl: true).and_yield(http)
+      allow(http).to receive(:open_timeout=)
+      allow(http).to receive(:read_timeout=)
+      allow(http).to receive(:write_timeout=)
+      allow(http).to receive(:request).and_return(response)
+
+      expect { http_client.get('users/user_123') }.to raise_error(Clowk::Error, /response body too large/)
+    end
+
+    it 'accepts responses within the size limit' do
+      body = '{"ok":true}'
+
+      response = Net::HTTPSuccess.new('1.1', '200', 'OK')
+      allow(response).to receive(:body).and_return(body)
+      allow(response).to receive(:to_hash).and_return({})
+
+      allow(Net::HTTP).to receive(:start).with('api.clowk.dev', 443, use_ssl: true).and_yield(http)
+      allow(http).to receive(:open_timeout=)
+      allow(http).to receive(:read_timeout=)
+      allow(http).to receive(:write_timeout=)
+      allow(http).to receive(:request).and_return(response)
+
+      result = http_client.get('users/user_123')
+
+      expect(result).to be_success
+    end
+  end
+
   describe Clowk::Http::Response do
     it 'exposes a stable API and remains hash-compatible' do
       response = described_class.new(

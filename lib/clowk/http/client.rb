@@ -6,6 +6,8 @@ require 'uri'
 
 module Clowk
   class Http
+    MAX_BODY_SIZE = 1 * 1024 * 1024
+
     HTTP_METHODS = {
       get: Net::HTTP::Get,
       post: Net::HTTP::Post,
@@ -172,6 +174,9 @@ module Clowk
 
     def parse_response(response)
       body = response.body.to_s
+
+      raise Error, "response body too large (#{body.bytesize} bytes, max #{MAX_BODY_SIZE})" if body.bytesize > MAX_BODY_SIZE
+
       parsed = parse_body(body)
 
       Response.new(
