@@ -48,3 +48,5 @@
 
 *.log
 .rspec_status
+
+*.gem
