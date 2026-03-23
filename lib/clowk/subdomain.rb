@@ -4,6 +4,7 @@ require 'uri'
 
 module Clowk
   class Subdomain
+    API_BASE_URL = 'https://api.clowk.dev/api/v1'
     CACHE_TTL = 60
     DEFAULT_SUBDOMAIN_BASE = 'clowk.dev'
 
@@ -42,7 +43,6 @@ module Clowk
 
     def initialize(options = {})
       @publishable_key = options.fetch(:publishable_key, Clowk.config.publishable_key)
-      @api_base_url = options.fetch(:api_base_url, Clowk.config.api_base_url)
       @subdomain_url = options.fetch(:subdomain_url, Clowk.config.subdomain_url)
     end
 
@@ -55,7 +55,7 @@ module Clowk
 
     private
 
-    attr_reader :api_base_url, :publishable_key, :subdomain_url
+    attr_reader :publishable_key, :subdomain_url
 
     def resolve_from_key
       cached = self.class.read_cache(cache_key)
@@ -77,8 +77,14 @@ module Clowk
     def extract_url_from_instance(payload)
       return if payload.blank?
 
-      instance = payload.is_a?(Hash) ? payload : {}
-      instance_data = instance['instance'].is_a?(Hash) ? instance['instance'] : instance
+      root = payload.is_a?(Hash) ? payload : {}
+      instance_data = if root['instance'].is_a?(Hash)
+                        root['instance']
+                      elsif root['data'].is_a?(Hash)
+                        root['data']
+                      else
+                        root
+                      end
 
       explicit_url = instance_data['url'] || instance_data['subdomain_url'] || instance_data['instance_url']
       return normalize_url(explicit_url) if explicit_url.present?
@@ -114,7 +120,7 @@ module Clowk
     end
 
     def client
-      @client ||= Clowk::SDK::Client.new
+      @client ||= Clowk::SDK::Client.new(api_base_url: API_BASE_URL)
     end
   end
 end
