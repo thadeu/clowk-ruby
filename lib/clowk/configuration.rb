@@ -2,7 +2,6 @@
 
 module Clowk
   class Configuration
-    attr_accessor :api_base_url
     attr_accessor :app_base_url
     attr_accessor :after_sign_in_path
     attr_accessor :after_sign_out_path
@@ -24,7 +23,6 @@ module Clowk
     attr_accessor :token_param
 
     def initialize
-      @api_base_url = 'https://api.clowk.dev/client/v1'
       @app_base_url = 'https://app.clowk.in'
       @after_sign_in_path = '/'
       @after_sign_out_path = '/'

@@ -6,7 +6,7 @@ module Clowk
   module SDK
     class Client
       def initialize(options = {})
-        @api_base_url = options.fetch(:api_base_url, Clowk.config.api_base_url)
+        @api_base_url = options.fetch(:api_base_url, nil).presence || derive_api_base_url
         @secret_key = options.fetch(:secret_key, Clowk.config.secret_key)
         @publishable_key = options.fetch(:publishable_key, Clowk.config.publishable_key)
       end
@@ -64,6 +64,13 @@ module Clowk
       private
 
       attr_reader :api_base_url, :publishable_key, :secret_key
+
+      def derive_api_base_url
+        base = Clowk.config.subdomain_url.to_s.strip
+        return if base.empty?
+
+        "#{base.sub(%r{/$}, '')}/api/v1"
+      end
 
       def http
         @http ||= Clowk::Http.new(
