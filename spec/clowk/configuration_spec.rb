@@ -3,8 +3,8 @@
 RSpec.describe Clowk::Configuration do
   subject(:configuration) { described_class.new }
 
-  it 'defaults the client api_base_url to the public client API' do
-    expect(configuration.api_base_url).to eq('https://api.clowk.dev/client/v1')
+  it 'defaults the app_base_url to the public app' do
+    expect(configuration.app_base_url).to eq('https://app.clowk.in')
   end
 
   it 'defaults the callback_path to the oauth callback route' do

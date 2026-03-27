@@ -12,7 +12,6 @@ RSpec.describe Clowk::Subdomain do
     Clowk.configure do |config|
       config.publishable_key = 'pk_test_123'
       config.subdomain_url = 'https://hardcoded.clowk.dev'
-      config.api_base_url = 'https://api.clowk.in/client/v1'
     end
 
     instance_response = Clowk::Http::Response.new(
@@ -23,7 +22,7 @@ RSpec.describe Clowk::Subdomain do
       success: true
     )
 
-    allow(Clowk::SDK::Client).to receive(:new).with(no_args).and_return(sdk)
+    allow(Clowk::SDK::Client).to receive(:new).with(api_base_url: Clowk::Subdomain::API_BASE_URL).and_return(sdk)
     allow(sdk).to receive(:subdomains).and_return(subdomains)
     allow(subdomains).to receive(:find_by_pk).with('pk_test_123').and_return(instance_response)
 
@@ -46,7 +45,6 @@ RSpec.describe Clowk::Subdomain do
 
     Clowk.configure do |config|
       config.publishable_key = 'pk_test_123'
-      config.api_base_url = 'https://api.clowk.in/client/v1'
     end
 
     instance_response = Clowk::Http::Response.new(
@@ -57,7 +55,7 @@ RSpec.describe Clowk::Subdomain do
       success: true
     )
 
-    allow(Clowk::SDK::Client).to receive(:new).once.with(no_args).and_return(sdk)
+    allow(Clowk::SDK::Client).to receive(:new).once.with(api_base_url: Clowk::Subdomain::API_BASE_URL).and_return(sdk)
 
     allow(sdk).to receive(:subdomains).and_return(subdomains)
     allow(subdomains).to receive(:find_by_pk).with('pk_test_123').once.and_return(instance_response)
@@ -85,7 +83,7 @@ RSpec.describe Clowk::Subdomain do
       success: true
     )
 
-    allow(Clowk::SDK::Client).to receive(:new).with(no_args).and_return(sdk)
+    allow(Clowk::SDK::Client).to receive(:new).with(api_base_url: Clowk::Subdomain::API_BASE_URL).and_return(sdk)
     allow(sdk).to receive(:subdomains).and_return(subdomains)
     allow(subdomains).to receive(:find_by_pk).with('pk_test_123').and_return(instance_response)
 

@@ -22,7 +22,7 @@ RSpec.describe Clowk::SDK::Session do
 
   describe '#list' do
     it 'calls GET /sessions' do
-      allow(http_client).to receive(:get).with('sessions', headers: {}).and_return(ok_response)
+      allow(http_client).to receive(:get).with('sessions').and_return(ok_response)
 
       result = resource.list
 
@@ -32,7 +32,7 @@ RSpec.describe Clowk::SDK::Session do
 
   describe '#find' do
     it 'calls GET /sessions/:id' do
-      allow(http_client).to receive(:get).with('sessions/clk_session_abc', headers: {}).and_return(ok_response)
+      allow(http_client).to receive(:get).with('sessions/clk_session_abc').and_return(ok_response)
 
       result = resource.find('clk_session_abc')
 
@@ -43,7 +43,7 @@ RSpec.describe Clowk::SDK::Session do
   describe '#search' do
     it 'calls GET /sessions/search?email=...' do
       allow(http_client).to receive(:get)
-        .with('sessions/search?email=jane%40example.com', headers: {})
+        .with('sessions/search?email=jane%40example.com')
         .and_return(ok_response)
 
       result = resource.search(email: 'jane@example.com')
@@ -53,7 +53,7 @@ RSpec.describe Clowk::SDK::Session do
 
     it 'URL-encodes the email' do
       allow(http_client).to receive(:get)
-        .with('sessions/search?email=user%2Btag%40example.com', headers: {})
+        .with('sessions/search?email=user%2Btag%40example.com')
         .and_return(ok_response)
 
       result = resource.search(email: 'user+tag@example.com')
@@ -73,7 +73,7 @@ RSpec.describe Clowk::SDK::Session do
       )
 
       allow(http_client).to receive(:delete)
-        .with('sessions/clk_session_abc', nil, headers: {})
+        .with('sessions/clk_session_abc')
         .and_return(revoke_response)
 
       result = resource.revoke('clk_session_abc')
