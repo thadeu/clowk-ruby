@@ -12,6 +12,8 @@ module Clowk
       authenticate_method = :"authenticate_#{scope}!"
       signed_in_method = :"#{scope}_signed_in?"
 
+      enforce_session_method = :"#{scope}_enforce_session!"
+
       base.class_eval do
         define_method(current_method) do
           clowk_current_resource
@@ -23,6 +25,10 @@ module Clowk
 
         define_method(signed_in_method) do
           clowk_current_resource.present?
+        end
+
+        define_method(enforce_session_method) do
+          clowk_enforce_session!
         end
 
         helper_method current_method, authenticate_method, signed_in_method, :current_token if respond_to?(:helper_method)
@@ -46,6 +52,33 @@ module Clowk
 
     def clowk_signed_in?
       clowk_current_resource.present?
+    end
+
+    def clowk_session_status
+      @clowk_session_status ||= resolve_session_status
+    end
+
+    def clowk_session_active?
+      clowk_session_status&.dig(:status) == 'active'
+    end
+
+    def clowk_enforce_session!
+      return if clowk_session_active?
+
+      session_info = clowk_session_status
+      callback = Clowk.config.on_session_expired
+
+      if callback.respond_to?(:call)
+        callback.call(self, session_info)
+
+        return
+      end
+
+      if request.format.json?
+        render json: { error: 'Session expired or inactive' }, status: :unauthorized
+      else
+        redirect_to clowk_sign_in_path(return_to: request.fullpath)
+      end
     end
 
     def clowk_authenticate!
@@ -96,7 +129,7 @@ module Clowk
 
     def persist_clowk_session(token, payload)
       session[Clowk.config.session_key] = {
-        token: token,
+        token:,
         user: payload,
         signed_in_at: Time.now.to_i
       }
@@ -107,6 +140,25 @@ module Clowk
         same_site: :lax,
         secure: request.ssl?
       }
+    end
+
+    def resolve_session_status
+      cached = stored_session&.dig('session_status') || stored_session&.dig(:session_status)
+
+      return cached&.deep_symbolize_keys if cached
+
+      resource = clowk_current_resource
+
+      return unless resource&.session_id
+      return unless Clowk.config.secret_key.present?
+
+      client = Clowk::SDK::Client.new(secret_key: Clowk.config.secret_key)
+      result = client.tokens.verify_with_session(token: current_token)
+      status = result&.dig(:session)
+
+      session[Clowk.config.session_key] = stored_session.merge('session_status' => status) if status && stored_session
+
+      status
     end
   end
 end

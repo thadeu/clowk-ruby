@@ -21,6 +21,8 @@ module Clowk
     attr_accessor :session_key
     attr_accessor :subdomain_url
     attr_accessor :token_param
+    attr_accessor :enforce_active_session
+    attr_accessor :on_session_expired
 
     def initialize
       @app_base_url = 'https://app.clowk.in'
@@ -39,6 +41,8 @@ module Clowk
       @session_key = :clowk
       @prefix_by = :clowk
       @token_param = :token
+      @enforce_active_session = false
+      @on_session_expired = nil
     end
   end
 end

@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    clowk (0.1.0)
+    clowk (0.2.0)
       activesupport (>= 7.0)
       jwt (>= 2.7, < 3.0)
       railties (>= 7.0)

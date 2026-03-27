@@ -36,6 +36,10 @@ module Clowk
       attributes[:app_id]
     end
 
+    def session_id
+      attributes[:session_id]
+    end
+
     def [](key)
       attributes[key.to_sym]
     end
