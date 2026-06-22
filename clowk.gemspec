@@ -11,7 +11,7 @@ Gem::Specification.new do |spec|
   spec.summary = "Rails SDK for Clowk authentication"
   spec.description = "Clowk Authentication, JWT verification, and future API access"
   spec.homepage = "https://clowk.in"
-  spec.license = "AGPL-3.0"
+  spec.license = "AGPL-3.0-only"
   spec.required_ruby_version = ">= 3.3"
   spec.metadata = {
     "rubygems_mfa_required" => "true"
