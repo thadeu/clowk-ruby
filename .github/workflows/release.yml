@@ -11,6 +11,7 @@ jobs:
 
     permissions:
       contents: read
+      id-token: write
 
     steps:
       - uses: actions/checkout@v4
@@ -33,9 +34,10 @@ jobs:
       - name: Run tests
         run: bundle exec rspec
 
+      - name: Configure RubyGems trusted publishing credentials
+        uses: rubygems/configure-rubygems-credentials@v2.1.0
+
       - name: Build and publish to RubyGems
         run: |
           gem build clowk.gemspec
-          gem push clowk-*.gem
-        env:
-          GEM_HOST_API_KEY: ${{ secrets.RUBYGEMS_API_KEY }}
+          gem push clowk-*.gem < /dev/null
