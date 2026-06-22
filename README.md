@@ -86,7 +86,7 @@ Clowk.configure do |config|
   config.after_sign_in_path = '/'
   config.after_sign_out_path = '/'
 
-  config.api_base_url = 'https://api.clowk.dev/client/v1'
+  config.api_base_url = 'https://api.clowk.dev/api/v1'
   config.callback_path = '/clowk/oauth/callback'
   config.mount_path = '/clowk'
 
@@ -362,4 +362,4 @@ Its job is to make the Rails side of Clowk integration predictable:
 
 ## License
 
-MIT. See `LICENSE`.
+AGPL-3.0. See `LICENSE`.

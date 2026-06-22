@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-require 'jwt'
+require "jwt"
 
 module Clowk
   class JwtVerifier
-    ALGORITHM = 'HS256'
+    ALGORITHM = "HS256"
 
     def initialize(secret_key: Clowk.config.secret_key, issuer: Clowk.config.issuer)
       @secret_key = secret_key
@@ -12,9 +12,9 @@ module Clowk
     end
 
     def verify(token)
-      raise ConfigurationError, 'missing Clowk secret_key' if @secret_key.to_s.empty?
+      raise ConfigurationError, "missing Clowk secret_key" if @secret_key.to_s.empty?
 
-      options = { algorithm: ALGORITHM }
+      options = {algorithm: ALGORITHM}
       options[:iss] = @issuer if @issuer
       options[:verify_iss] = @issuer.present?
 

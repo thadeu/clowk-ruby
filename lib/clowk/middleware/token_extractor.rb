@@ -18,7 +18,7 @@ module Clowk
       attr_reader :request, :token_param, :cookie_key
 
       def token_from_params
-        params = request.respond_to?(:params) && request.params ? request.params : {}
+        params = (request.respond_to?(:params) && request.params) ? request.params : {}
         params[token_param.to_s].presence
       end
 
@@ -26,8 +26,8 @@ module Clowk
         header = request.authorization.to_s
         return if header.empty?
 
-        scheme, token = header.split(' ', 2)
-        return unless scheme.to_s.casecmp('Bearer').zero?
+        scheme, token = header.split(" ", 2)
+        return unless scheme.to_s.casecmp("Bearer").zero?
 
         token.presence
       end

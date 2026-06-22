@@ -47,5 +47,19 @@ module Clowk
     def to_h
       attributes.merge(id: id)
     end
+
+    def ==(other)
+      return false unless other.is_a?(Current)
+
+      to_h == other.to_h
+    end
+
+    def eql?(other)
+      self == other
+    end
+
+    def hash
+      to_h.hash
+    end
   end
 end

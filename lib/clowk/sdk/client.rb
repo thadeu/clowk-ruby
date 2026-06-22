@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
-require 'active_support/inflector'
+require "active_support/inflector"
 
 module Clowk
   module SDK
     class Client
       def initialize(options = {})
-        @api_base_url = options.fetch(:api_base_url, nil).presence || derive_api_base_url
+        @api_base_url = options.fetch(:api_base_url, nil).presence || Clowk.config.api_base_url
         @secret_key = options.fetch(:secret_key, Clowk.config.secret_key)
         @publishable_key = options.fetch(:publishable_key, Clowk.config.publishable_key)
       end
@@ -18,7 +18,7 @@ module Clowk
 
         return super unless Clowk::SDK.const_defined?(resource_class_name)
 
-        resource_ivar = "@#{method_name}"
+        resource_ivar = :"@#{resource_class_name}"
         return instance_variable_get(resource_ivar) if instance_variable_defined?(resource_ivar)
 
         resource_class = Clowk::SDK.const_get(resource_class_name)
@@ -65,13 +65,6 @@ module Clowk
 
       attr_reader :api_base_url, :publishable_key, :secret_key
 
-      def derive_api_base_url
-        base = Clowk.config.subdomain_url.to_s.strip
-        return if base.empty?
-
-        "#{base.sub(%r{/$}, '')}/api/v1"
-      end
-
       def http
         @http ||= Clowk::Http.new(
           base_url: api_base_url,
@@ -87,8 +80,8 @@ module Clowk
 
       def default_headers
         {}.tap do |headers|
-          headers['X-Clowk-Secret-Key'] = secret_key if secret_key.present?
-          headers['X-Clowk-Publishable-Key'] = publishable_key if publishable_key.present?
+          headers["X-Clowk-Secret-Key"] = secret_key if secret_key.present?
+          headers["X-Clowk-Publishable-Key"] = publishable_key if publishable_key.present?
         end
       end
     end

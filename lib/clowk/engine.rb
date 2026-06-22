@@ -4,7 +4,7 @@ module Clowk
   class Engine < ::Rails::Engine
     isolate_namespace Clowk
 
-    initializer 'clowk.helpers' do
+    initializer "clowk.helpers" do
       ActiveSupport.on_load(:action_controller_base) do
         include Clowk::Helpers::UrlHelpers
       end

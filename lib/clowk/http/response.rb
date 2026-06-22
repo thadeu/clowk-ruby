@@ -27,15 +27,15 @@ module Clowk
           body: body,
           body_parsed: body_parsed,
           headers: headers,
-          success?: success?
+          success: success?
         }
       end
 
       def ==(other)
-        if other.respond_to?(:to_h)
-          to_h == other.to_h
+        to_h == if other.respond_to?(:to_h)
+          other.to_h
         else
-          to_h == other
+          other
         end
       end
     end

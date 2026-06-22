@@ -3,15 +3,15 @@
 RSpec.describe Clowk::Configuration do
   subject(:configuration) { described_class.new }
 
-  it 'defaults the app_base_url to the public app' do
-    expect(configuration.app_base_url).to eq('https://app.clowk.in')
+  it "defaults the app_base_url to the public app" do
+    expect(configuration.app_base_url).to eq("https://app.clowk.in")
   end
 
-  it 'defaults the callback_path to the oauth callback route' do
-    expect(configuration.callback_path).to eq('/clowk/oauth/callback')
+  it "defaults the callback_path to the oauth callback route" do
+    expect(configuration.callback_path).to eq("/clowk/oauth/callback")
   end
 
-  it 'defaults the http timeouts and retries' do
+  it "defaults the http timeouts and retries" do
     expect(configuration.http_logger).to be_nil
     expect(configuration.http_open_timeout).to eq(5)
     expect(configuration.http_read_timeout).to eq(10)
@@ -20,11 +20,11 @@ RSpec.describe Clowk::Configuration do
     expect(configuration.http_retry_interval).to eq(0.05)
   end
 
-  it 'defaults the prefix_by to clowk' do
+  it "defaults the prefix_by to clowk" do
     expect(configuration.prefix_by).to eq(:clowk)
   end
 
-  it 'allows overriding the prefix_by' do
+  it "allows overriding the prefix_by" do
     configuration.prefix_by = :member
 
     expect(configuration.prefix_by).to eq(:member)

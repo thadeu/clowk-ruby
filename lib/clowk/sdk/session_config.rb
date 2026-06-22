@@ -4,7 +4,7 @@ module Clowk
   module SDK
     class SessionConfig < Resource
       def self.resource_path
-        'session_config'
+        "session_config"
       end
 
       def fetch

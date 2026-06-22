@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require 'json'
-require 'net/http'
-require 'uri'
+require "json"
+require "net/http"
+require "uri"
 
 module Clowk
   class Http
@@ -121,7 +121,7 @@ module Clowk
 
       request.body = JSON.generate(env[:body]) unless env[:body].nil?
 
-      raw_response = Net::HTTP.start(env[:uri].host, env[:uri].port, use_ssl: env[:uri].scheme == 'https') do |http|
+      raw_response = Net::HTTP.start(env[:uri].host, env[:uri].port, use_ssl: env[:uri].scheme == "https") do |http|
         apply_timeouts(http, env[:timeouts])
         http.request(request)
       end
@@ -144,12 +144,12 @@ module Clowk
     end
 
     def normalize_path(path)
-      path.to_s.start_with?('/') ? path : "/#{path}"
+      path.to_s.start_with?("/") ? path : "/#{path}"
     end
 
     def join_paths(base_path, extra_path)
-      segments = [base_path.to_s, extra_path.to_s].map { |segment| segment.gsub(%r{^/+|/+$}, '') }.reject(&:empty?)
-      "/#{segments.join('/')}"
+      segments = [base_path.to_s, extra_path.to_s].map { |segment| segment.gsub(%r{^/+|/+$}, "") }.reject(&:empty?)
+      "/#{segments.join("/")}"
     end
 
     def apply_headers(request, request_headers)
@@ -167,8 +167,8 @@ module Clowk
 
     def default_headers
       {
-        'Accept' => 'application/json',
-        'Content-Type' => 'application/json'
+        "Accept" => "application/json",
+        "Content-Type" => "application/json"
       }
     end
 

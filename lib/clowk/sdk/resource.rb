@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
-require 'erb'
+require "erb"
 
 module Clowk
   module SDK
     class Resource
       def self.resource_path
-        raise NotImplementedError, 'resource_path must be implemented'
+        raise NotImplementedError, "resource_path must be implemented"
       end
 
       def initialize(client)
@@ -31,10 +31,10 @@ module Clowk
       # @return [Clowk::Http::Response]
       def search(raw_query = nil, **filters)
         query = if raw_query.is_a?(String)
-                  raw_query
-                else
-                  filters.map { |k, v| "#{k}:#{v}" }.join(' ')
-                end
+          raw_query
+        else
+          filters.map { |k, v| "#{k}:#{v}" }.join(" ")
+        end
 
         client.get("#{self.class.resource_path}/search?query=#{ERB::Util.url_encode(query)}")
       end

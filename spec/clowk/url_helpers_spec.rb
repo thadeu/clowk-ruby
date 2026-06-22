@@ -16,9 +16,7 @@ RSpec.describe Clowk::Helpers::UrlHelpers do
         @request = request
       end
 
-      def request
-        @request
-      end
+      attr_reader :request
     end
   end
 
@@ -40,18 +38,18 @@ RSpec.describe Clowk::Helpers::UrlHelpers do
     )
   end
 
-  it 'prioritizes publishable_key resolution over a hardcoded subdomain_url' do
+  it "prioritizes publishable_key resolution over a hardcoded subdomain_url" do
     Clowk.configure do |config|
-      config.publishable_key = 'pk_test_123'
-      config.subdomain_url = 'https://hardcoded.clowk.dev'
+      config.publishable_key = "pk_test_123"
+      config.subdomain_url = "https://hardcoded.clowk.dev"
     end
 
     instance = helper_host.new(request)
 
-    allow(Clowk::Subdomain).to receive(:resolve_url!).and_return('https://latest.clowk.dev')
+    allow(Clowk::Subdomain).to receive(:resolve_url!).and_return("https://latest.clowk.dev")
 
     expect(instance.clowk_sign_in_url).to eq(
-      'https://latest.clowk.dev/sign-in?redirect_uri=https%3A%2F%2Fmyapp.test%2Fclowk%2Foauth%2Fcallback'
+      "https://latest.clowk.dev/sign-in?redirect_uri=https%3A%2F%2Fmyapp.test%2Fclowk%2Foauth%2Fcallback"
     )
 
     expect(Clowk::Subdomain).to have_received(:resolve_url!)

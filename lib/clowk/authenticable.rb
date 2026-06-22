@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require 'active_support/concern'
+require "active_support/concern"
 
 module Clowk
   module Authenticable
@@ -15,20 +15,28 @@ module Clowk
       enforce_session_method = :"#{scope}_enforce_session!"
 
       base.class_eval do
-        define_method(current_method) do
-          clowk_current_resource
+        unless current_method == :clowk_current_resource
+          define_method(current_method) do
+            clowk_current_resource
+          end
         end
 
-        define_method(authenticate_method) do
-          clowk_authenticate!
+        unless authenticate_method == :clowk_authenticate!
+          define_method(authenticate_method) do
+            clowk_authenticate!
+          end
         end
 
-        define_method(signed_in_method) do
-          clowk_current_resource.present?
+        unless signed_in_method == :clowk_signed_in?
+          define_method(signed_in_method) do
+            clowk_signed_in?
+          end
         end
 
-        define_method(enforce_session_method) do
-          clowk_enforce_session!
+        unless enforce_session_method == :clowk_enforce_session!
+          define_method(enforce_session_method) do
+            clowk_enforce_session!
+          end
         end
 
         helper_method current_method, authenticate_method, signed_in_method, :current_token if respond_to?(:helper_method)
@@ -47,7 +55,7 @@ module Clowk
     end
 
     def current_token
-      stored_session&.dig('token') || extracted_token
+      stored_session&.dig("token") || extracted_token
     end
 
     def clowk_signed_in?
@@ -59,7 +67,7 @@ module Clowk
     end
 
     def clowk_session_active?
-      clowk_session_status&.dig(:status) == 'active'
+      clowk_session_status&.dig(:status) == "active"
     end
 
     def clowk_enforce_session!
@@ -74,21 +82,13 @@ module Clowk
         return
       end
 
-      if request.format.json?
-        render json: { error: 'Session expired or inactive' }, status: :unauthorized
-      else
-        redirect_to clowk_sign_in_path(return_to: request.fullpath)
-      end
+      clowk_handle_expired_session(session_info)
     end
 
     def clowk_authenticate!
       return clowk_current_resource if clowk_signed_in?
 
-      if request.format.json?
-        render json: { error: 'Unauthorized' }, status: :unauthorized
-      else
-        redirect_to clowk_sign_in_path(return_to: request.fullpath)
-      end
+      clowk_handle_unauthenticated
     end
 
     def clowk_sign_out!
@@ -99,6 +99,22 @@ module Clowk
     end
 
     private
+
+    def clowk_handle_unauthenticated
+      if request.format.json?
+        render json: {error: "Unauthorized"}, status: :unauthorized
+      else
+        redirect_to clowk_sign_in_path(return_to: request.fullpath)
+      end
+    end
+
+    def clowk_handle_expired_session(_session_info)
+      if request.format.json?
+        render json: {error: "Session expired or inactive"}, status: :unauthorized
+      else
+        redirect_to clowk_sign_in_path(return_to: request.fullpath)
+      end
+    end
 
     def verified_request_payload
       return unless extracted_token
@@ -123,7 +139,7 @@ module Clowk
     end
 
     def stored_user_payload
-      payload = stored_session&.dig('user') || stored_session&.dig(:user)
+      payload = stored_session&.dig("user") || stored_session&.dig(:user)
       payload&.deep_symbolize_keys
     end
 
@@ -143,7 +159,7 @@ module Clowk
     end
 
     def resolve_session_status
-      cached = stored_session&.dig('session_status') || stored_session&.dig(:session_status)
+      cached = stored_session&.dig("session_status") || stored_session&.dig(:session_status)
 
       return cached&.deep_symbolize_keys if cached
 
@@ -156,9 +172,11 @@ module Clowk
       result = client.tokens.verify_with_session(token: current_token)
       status = result&.dig(:session)
 
-      session[Clowk.config.session_key] = stored_session.merge('session_status' => status) if status && stored_session
+      session[Clowk.config.session_key] = stored_session.merge("session_status" => status) if status && stored_session
 
       status
+    rescue Clowk::InvalidTokenError
+      nil
     end
   end
 end

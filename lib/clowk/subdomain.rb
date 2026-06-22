@@ -1,12 +1,13 @@
 # frozen_string_literal: true
 
-require 'uri'
+require "uri"
 
 module Clowk
   class Subdomain
-    API_BASE_URL = 'https://api.clowk.dev/api/v1'
     CACHE_TTL = 60
-    DEFAULT_SUBDOMAIN_BASE = 'clowk.dev'
+    DEFAULT_SUBDOMAIN_BASE = "clowk.dev"
+
+    @cache_mutex = Mutex.new
 
     class << self
       def resolve_url!(...)
@@ -14,24 +15,28 @@ module Clowk
       end
 
       def clear_cache!
-        @cache = {}
+        @cache_mutex.synchronize { @cache = {} }
       end
 
       def read_cache(key)
-        entry = cache[key]
+        @cache_mutex.synchronize do
+          entry = cache[key]
 
-        return unless entry
-        return entry[:value] if entry[:expires_at] > Time.now
+          return unless entry
+          return entry[:value] if entry[:expires_at] > Time.now
 
-        cache.delete(key)
-        nil
+          cache.delete(key)
+          nil
+        end
       end
 
       def write_cache(key, value, ttl:)
-        cache[key] = {
-          value: value,
-          expires_at: Time.now + ttl
-        }
+        @cache_mutex.synchronize do
+          cache[key] = {
+            value: value,
+            expires_at: Time.now + ttl
+          }
+        end
       end
 
       private
@@ -50,7 +55,7 @@ module Clowk
       return resolve_from_key if publishable_key.present?
       return normalize_url(subdomain_url) if subdomain_url.present?
 
-      raise ConfigurationError, 'set publishable_key or subdomain_url to build Clowk URLs'
+      raise ConfigurationError, "set publishable_key or subdomain_url to build Clowk URLs"
     end
 
     private
@@ -64,7 +69,7 @@ module Clowk
       response = client.subdomains.find_by_pk(publishable_key)
       resolved = extract_url_from_instance(response.body_parsed)
 
-      raise ConfigurationError, 'could not resolve subdomain_url from publishable_key' if resolved.blank?
+      raise ConfigurationError, "could not resolve subdomain_url from publishable_key" if resolved.blank?
 
       self.class.write_cache(cache_key, resolved, ttl: CACHE_TTL)
       resolved
@@ -78,27 +83,27 @@ module Clowk
       return if payload.blank?
 
       root = payload.is_a?(Hash) ? payload : {}
-      instance_data = if root['instance'].is_a?(Hash)
-                        root['instance']
-                      elsif root['data'].is_a?(Hash)
-                        root['data']
-                      else
-                        root
-                      end
+      instance_data = if root["instance"].is_a?(Hash)
+        root["instance"]
+      elsif root["data"].is_a?(Hash)
+        root["data"]
+      else
+        root
+      end
 
-      explicit_url = instance_data['url'] || instance_data['subdomain_url'] || instance_data['instance_url']
+      explicit_url = instance_data["url"] || instance_data["subdomain_url"] || instance_data["instance_url"]
       return normalize_url(explicit_url) if explicit_url.present?
 
-      host = instance_data['host'] || instance_data['domain'] || instance_data['hostname']
+      host = instance_data["host"] || instance_data["domain"] || instance_data["hostname"]
       return normalize_url(host_to_url(host)) if host.present?
 
-      subdomain = instance_data['subdomain']
+      subdomain = instance_data["subdomain"]
       normalize_url("https://#{subdomain}.#{default_subdomain_base}") if subdomain.present?
     end
 
     def host_to_url(host)
       value = host.to_s
-      return value if value.start_with?('http://', 'https://')
+      return value if value.start_with?("http://", "https://")
 
       "https://#{value}"
     end
@@ -110,17 +115,17 @@ module Clowk
       uri = URI.parse(configured)
       return DEFAULT_SUBDOMAIN_BASE if uri.host.blank?
 
-      uri.host.split('.').drop(1).join('.')
+      uri.host.split(".").drop(1).join(".")
     rescue URI::InvalidURIError
       DEFAULT_SUBDOMAIN_BASE
     end
 
     def normalize_url(value)
-      value.to_s.sub(%r{/$}, '')
+      value.to_s.sub(%r{/$}, "")
     end
 
     def client
-      @client ||= Clowk::SDK::Client.new(api_base_url: API_BASE_URL)
+      @client ||= Clowk::SDK::Client.new(api_base_url: Clowk.config.api_base_url)
     end
   end
 end

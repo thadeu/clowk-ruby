@@ -1,15 +1,15 @@
 # frozen_string_literal: true
 
-require 'rails'
-require 'rails/engine'
-require 'action_controller/railtie'
-require 'active_support'
-require 'active_support/core_ext/hash'
-require 'active_support/core_ext/object/blank'
-require 'rack'
+require "rails"
+require "rails/engine"
+require "action_controller/railtie"
+require "active_support"
+require "active_support/core_ext/hash"
+require "active_support/core_ext/object/blank"
+require "rack"
 
-require_relative 'clowk/version'
-require_relative 'clowk/configuration'
+require_relative "clowk/version"
+require_relative "clowk/configuration"
 
 module Clowk
   class Error < StandardError; end
@@ -24,6 +24,7 @@ module Clowk
 
     def configure
       yield(config)
+      config.validate!
     end
 
     def reset!
@@ -33,25 +34,25 @@ module Clowk
   end
 end
 
-require_relative 'clowk/current'
-require_relative 'clowk/http/response'
-require_relative 'clowk/http/logger_middleware'
-require_relative 'clowk/http/retry_middleware'
-require_relative 'clowk/http/timeout_middleware'
-require_relative 'clowk/http/client'
-require_relative 'clowk/sdk/resource'
-require_relative 'clowk/sdk/user'
-require_relative 'clowk/sdk/session'
-require_relative 'clowk/sdk/subdomain'
-require_relative 'clowk/sdk/token'
-require_relative 'clowk/sdk/session_config'
-require_relative 'clowk/sdk/client'
-require_relative 'clowk/subdomain'
-require_relative 'clowk/jwt_verifier'
-require_relative 'clowk/helpers/url_helpers'
-require_relative 'clowk/middleware/token_extractor'
-require_relative 'clowk/authenticable'
-require_relative 'clowk/controllers/base_controller'
-require_relative 'clowk/controllers/callbacks_controller'
-require_relative 'clowk/controllers/sessions_controller'
-require_relative 'clowk/engine'
+require_relative "clowk/current"
+require_relative "clowk/http/response"
+require_relative "clowk/http/logger_middleware"
+require_relative "clowk/http/retry_middleware"
+require_relative "clowk/http/timeout_middleware"
+require_relative "clowk/http/client"
+require_relative "clowk/sdk/resource"
+require_relative "clowk/sdk/user"
+require_relative "clowk/sdk/session"
+require_relative "clowk/sdk/subdomain"
+require_relative "clowk/sdk/token"
+require_relative "clowk/sdk/session_config"
+require_relative "clowk/sdk/client"
+require_relative "clowk/subdomain"
+require_relative "clowk/jwt_verifier"
+require_relative "clowk/helpers/url_helpers"
+require_relative "clowk/middleware/token_extractor"
+require_relative "clowk/authenticable"
+require_relative "clowk/controllers/base_controller"
+require_relative "clowk/controllers/callbacks_controller"
+require_relative "clowk/controllers/sessions_controller"
+require_relative "clowk/engine"

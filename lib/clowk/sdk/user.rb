@@ -4,7 +4,7 @@ module Clowk
   module SDK
     class User < Resource
       def self.resource_path
-        'users'
+        "users"
       end
     end
   end

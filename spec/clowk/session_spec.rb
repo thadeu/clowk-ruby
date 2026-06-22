@@ -8,21 +8,21 @@ RSpec.describe Clowk::SDK::Session do
     Clowk::Http::Response.new(
       status: 200,
       body: '{"ok":true}',
-      body_parsed: { 'ok' => true },
+      body_parsed: {"ok" => true},
       headers: {},
       success: true
     )
   end
 
-  describe '.resource_path' do
-    it 'is sessions' do
-      expect(described_class.resource_path).to eq('sessions')
+  describe ".resource_path" do
+    it "is sessions" do
+      expect(described_class.resource_path).to eq("sessions")
     end
   end
 
-  describe '#list' do
-    it 'calls GET /sessions' do
-      allow(http_client).to receive(:get).with('sessions').and_return(ok_response)
+  describe "#list" do
+    it "calls GET /sessions" do
+      allow(http_client).to receive(:get).with("sessions").and_return(ok_response)
 
       result = resource.list
 
@@ -30,53 +30,73 @@ RSpec.describe Clowk::SDK::Session do
     end
   end
 
-  describe '#find' do
-    it 'calls GET /sessions/:id' do
-      allow(http_client).to receive(:get).with('sessions/clk_session_abc').and_return(ok_response)
+  describe "#find" do
+    it "calls GET /sessions/:id" do
+      allow(http_client).to receive(:get).with("sessions/clk_session_abc").and_return(ok_response)
 
-      result = resource.find('clk_session_abc')
-
-      expect(result).to eq(ok_response)
-    end
-  end
-
-  describe '#search' do
-    it 'calls GET /sessions/search?email=...' do
-      allow(http_client).to receive(:get)
-        .with('sessions/search?email=jane%40example.com')
-        .and_return(ok_response)
-
-      result = resource.search(email: 'jane@example.com')
-
-      expect(result).to eq(ok_response)
-    end
-
-    it 'URL-encodes the email' do
-      allow(http_client).to receive(:get)
-        .with('sessions/search?email=user%2Btag%40example.com')
-        .and_return(ok_response)
-
-      result = resource.search(email: 'user+tag@example.com')
+      result = resource.find("clk_session_abc")
 
       expect(result).to eq(ok_response)
     end
   end
 
-  describe '#revoke' do
-    it 'calls DELETE /sessions/:id' do
+  describe "#search" do
+    it "calls GET /sessions/search?email=..." do
+      allow(http_client).to receive(:get)
+        .with("sessions/search?email=jane%40example.com")
+        .and_return(ok_response)
+
+      result = resource.search(email: "jane@example.com")
+
+      expect(result).to eq(ok_response)
+    end
+
+    it "URL-encodes the email" do
+      allow(http_client).to receive(:get)
+        .with("sessions/search?email=user%2Btag%40example.com")
+        .and_return(ok_response)
+
+      result = resource.search(email: "user+tag@example.com")
+
+      expect(result).to eq(ok_response)
+    end
+
+    it "forwards a raw query string to the base search endpoint" do
+      allow(http_client).to receive(:get)
+        .with("sessions/search?query=status%3Aactive%20created_at%3E2026-01-01")
+        .and_return(ok_response)
+
+      result = resource.search("status:active created_at>2026-01-01")
+
+      expect(result).to eq(ok_response)
+    end
+
+    it "forwards keyword filters to the base search endpoint" do
+      allow(http_client).to receive(:get)
+        .with("sessions/search?query=status%3Aactive")
+        .and_return(ok_response)
+
+      result = resource.search(status: "active")
+
+      expect(result).to eq(ok_response)
+    end
+  end
+
+  describe "#revoke" do
+    it "calls DELETE /sessions/:id" do
       revoke_response = Clowk::Http::Response.new(
         status: 200,
         body: '{"revoked":true}',
-        body_parsed: { 'revoked' => true },
+        body_parsed: {"revoked" => true},
         headers: {},
         success: true
       )
 
       allow(http_client).to receive(:delete)
-        .with('sessions/clk_session_abc')
+        .with("sessions/clk_session_abc")
         .and_return(revoke_response)
 
-      result = resource.revoke('clk_session_abc')
+      result = resource.revoke("clk_session_abc")
 
       expect(result).to eq(revoke_response)
     end

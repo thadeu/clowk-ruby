@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require 'logger'
+require "logger"
 
 module Clowk
   class Http
@@ -22,7 +22,8 @@ module Clowk
       attr_reader :app, :logger
 
       class NullLogger
-        def info(*); end
+        def info(*)
+        end
       end
     end
   end

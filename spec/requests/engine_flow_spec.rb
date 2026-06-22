@@ -7,7 +7,7 @@ RSpec.describe "Clowk engine flow" do
   it "redirects sign_in to the remote instance URL and embeds callback state" do
     session = integration_session
 
-    session.get "/clowk/sign_in", params: { return_to: "/dashboard" }
+    session.get "/clowk/sign_in", params: {return_to: "/dashboard"}
 
     expect(session.response.status).to eq(302)
 
@@ -22,13 +22,13 @@ RSpec.describe "Clowk engine flow" do
   it "stores the authenticated session and redirects to the original internal path" do
     session = integration_session
 
-    session.get "/clowk/sign_in", params: { return_to: "/dashboard" }
+    session.get "/clowk/sign_in", params: {return_to: "/dashboard"}
 
     remote_url = URI(session.response.location)
     redirect_uri = URI(CGI.unescape(CGI.parse(remote_url.query)["redirect_uri"].first))
     state = CGI.parse(redirect_uri.query)["state"].first
 
-    session.get "/clowk/oauth/callback", params: { token: issued_token, state: state }
+    session.get "/clowk/oauth/callback", params: {token: issued_token, state: state}
 
     expect(session.response.status).to eq(302)
     expect(session.response.location).to eq("http://www.example.com/dashboard")
@@ -38,8 +38,8 @@ RSpec.describe "Clowk engine flow" do
   it "rejects callbacks with an invalid state" do
     session = integration_session
 
-    session.get "/clowk/sign_in", params: { return_to: "/dashboard" }
-    session.get "/clowk/oauth/callback", params: { token: issued_token, state: "invalid" }
+    session.get "/clowk/sign_in", params: {return_to: "/dashboard"}
+    session.get "/clowk/oauth/callback", params: {token: issued_token, state: "invalid"}
 
     expect(session.response.status).to eq(302)
     expect(session.response.location).to eq("http://www.example.com/after_sign_out")
@@ -48,13 +48,13 @@ RSpec.describe "Clowk engine flow" do
   it "falls back to the default path when return_to is external" do
     session = integration_session
 
-    session.get "/clowk/sign_in", params: { return_to: "https://evil.com/phish" }
+    session.get "/clowk/sign_in", params: {return_to: "https://evil.com/phish"}
 
     remote_url = URI(session.response.location)
     redirect_uri = URI(CGI.unescape(CGI.parse(remote_url.query)["redirect_uri"].first))
     state = CGI.parse(redirect_uri.query)["state"].first
 
-    session.get "/clowk/oauth/callback", params: { token: issued_token, state: state }
+    session.get "/clowk/oauth/callback", params: {token: issued_token, state: state}
 
     expect(session.response.status).to eq(302)
     expect(session.response.location).to eq("http://www.example.com/after_sign_in")
@@ -63,11 +63,11 @@ RSpec.describe "Clowk engine flow" do
   it "signs out and redirects to the configured after_sign_out path" do
     session = integration_session
 
-    session.get "/clowk/sign_in", params: { return_to: "/dashboard" }
+    session.get "/clowk/sign_in", params: {return_to: "/dashboard"}
     remote_url = URI(session.response.location)
     redirect_uri = URI(CGI.unescape(CGI.parse(remote_url.query)["redirect_uri"].first))
     state = CGI.parse(redirect_uri.query)["state"].first
-    session.get "/clowk/oauth/callback", params: { token: issued_token, state: state }
+    session.get "/clowk/oauth/callback", params: {token: issued_token, state: state}
 
     session.get "/clowk/sign_out"
 

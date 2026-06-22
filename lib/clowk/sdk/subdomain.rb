@@ -4,7 +4,7 @@ module Clowk
   module SDK
     class Subdomain < Resource
       def self.resource_path
-        'instances'
+        "instances"
       end
 
       def find_by_pk(key = nil)

@@ -28,16 +28,14 @@ RSpec.describe Clowk::Authenticable do
 
       attr_reader :session, :cookies, :redirect_target
 
-      def initialize(session_data: nil, request:)
+      def initialize(request:, session_data: nil)
         @session = {}
         @session[Clowk.config.session_key] = session_data if session_data
         @cookies = {}
         @request = request
       end
 
-      def request
-        @request
-      end
+      attr_reader :request
 
       def redirect_to(target)
         @redirect_target = target
@@ -46,7 +44,7 @@ RSpec.describe Clowk::Authenticable do
   end
 
   it "exposes default clowk helper names" do
-    instance = dummy_class.new(session_data: { user: payload }, request: request)
+    instance = dummy_class.new(session_data: {user: payload}, request: request)
 
     expect(instance).to respond_to(:current_clowk, :authenticate_clowk!, :clowk_signed_in?)
     expect(instance.current_clowk).to be_a(Clowk::Current)
@@ -65,23 +63,21 @@ RSpec.describe Clowk::Authenticable do
 
       attr_reader :session, :cookies, :redirect_target
 
-      def initialize(session_data: nil, request:)
+      def initialize(request:, session_data: nil)
         @session = {}
         @session[Clowk.config.session_key] = session_data if session_data
         @cookies = {}
         @request = request
       end
 
-      def request
-        @request
-      end
+      attr_reader :request
 
       def redirect_to(target)
         @redirect_target = target
       end
     end
 
-    instance = custom_class.new(session_data: { user: payload }, request: request)
+    instance = custom_class.new(session_data: {user: payload}, request: request)
 
     expect(instance).to respond_to(:current_member, :authenticate_member!, :member_signed_in?)
     expect(instance.current_member).to be_a(Clowk::Current)
@@ -93,6 +89,24 @@ RSpec.describe Clowk::Authenticable do
 
     instance.authenticate_clowk!
 
+    expect(instance.redirect_target).to eq("/clowk/sign_in?return_to=%2Fdashboard")
+  end
+
+  it "redirects to sign in (instead of raising) when session verification fails" do
+    sdk_client = double("Clowk::SDK::Client")
+    tokens = instance_double(Clowk::SDK::Token)
+
+    allow(Clowk::SDK::Client).to receive(:new).and_return(sdk_client)
+    allow(sdk_client).to receive(:tokens).and_return(tokens)
+    allow(tokens).to receive(:verify_with_session)
+      .and_raise(Clowk::InvalidTokenError, "token expired")
+
+    instance = dummy_class.new(
+      session_data: {user: payload.merge("session_id" => "clk_session_abc")},
+      request: request
+    )
+
+    expect { instance.clowk_enforce_session! }.not_to raise_error
     expect(instance.redirect_target).to eq("/clowk/sign_in?return_to=%2Fdashboard")
   end
 end
