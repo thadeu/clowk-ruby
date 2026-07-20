@@ -22,6 +22,7 @@ module Clowk
     attr_accessor :token_param
     attr_accessor :enforce_active_session
     attr_accessor :on_session_expired
+    attr_accessor :session_status_ttl
 
     def initialize
       @api_base_url = "https://api.clowk.dev/api/v1"
@@ -43,6 +44,11 @@ module Clowk
       @token_param = :token
       @enforce_active_session = false
       @on_session_expired = nil
+      # How long a fetched session status stays trusted, in seconds. Without a
+      # TTL the first lookup would be cached for the life of the Rails session,
+      # which silently turns every later enforcement call into a no-op. Set 0 to
+      # check on every call.
+      @session_status_ttl = 300
     end
 
     def after_sign_in_path
@@ -64,6 +70,7 @@ module Clowk
       errors << "http_read_timeout must be Numeric" unless @http_read_timeout.is_a?(Numeric)
       errors << "http_write_timeout must be Numeric" unless @http_write_timeout.is_a?(Numeric)
       errors << "http_retry_attempts must be a non-negative Integer" unless @http_retry_attempts.is_a?(Integer) && @http_retry_attempts >= 0
+      errors << "session_status_ttl must be a non-negative Integer" unless @session_status_ttl.is_a?(Integer) && @session_status_ttl >= 0
 
       raise ConfigurationError, errors.join(", ") if errors.any?
 

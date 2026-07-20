@@ -13,6 +13,7 @@ module Clowk
       signed_in_method = :"#{scope}_signed_in?"
 
       enforce_session_method = :"#{scope}_enforce_session!"
+      sign_out_method = :"#{scope}_sign_out!"
 
       base.class_eval do
         unless current_method == :clowk_current_resource
@@ -36,6 +37,12 @@ module Clowk
         unless enforce_session_method == :clowk_enforce_session!
           define_method(enforce_session_method) do
             clowk_enforce_session!
+          end
+        end
+
+        unless sign_out_method == :clowk_sign_out!
+          define_method(sign_out_method) do
+            clowk_sign_out!
           end
         end
 
@@ -86,9 +93,17 @@ module Clowk
     end
 
     def clowk_authenticate!
-      return clowk_current_resource if clowk_signed_in?
+      return clowk_handle_unauthenticated unless clowk_signed_in?
 
-      clowk_handle_unauthenticated
+      # A valid token proves who signed in, not that the session still stands —
+      # revocation lives server-side. Opt in with config.enforce_active_session
+      # to pay a lookup (cached for session_status_ttl) on every authentication.
+      if Clowk.config.enforce_active_session
+        clowk_enforce_session!
+        return if respond_to?(:performed?) && performed?
+      end
+
+      clowk_current_resource
     end
 
     def clowk_sign_out!
@@ -127,8 +142,13 @@ module Clowk
       nil
     end
 
+    # Bearer header or cookie only — never the query string. A valid token in a
+    # URL would otherwise sign the visitor in on ANY path, bypassing the state
+    # check that makes the OAuth callback safe, and would stay replayable for the
+    # token's full lifetime anywhere the URL was logged. CallbacksController
+    # reads params directly, after validating state.
     def extracted_token
-      @extracted_token ||= Clowk::Middleware::TokenExtractor.new(request).call
+      @extracted_token ||= Clowk::Middleware::TokenExtractor.new(request, token_param: nil).call
     end
 
     def stored_session
@@ -161,7 +181,7 @@ module Clowk
     def resolve_session_status
       cached = stored_session&.dig("session_status") || stored_session&.dig(:session_status)
 
-      return cached&.deep_symbolize_keys if cached
+      return cached&.deep_symbolize_keys if cached && clowk_session_status_fresh?
 
       resource = clowk_current_resource
 
@@ -172,11 +192,29 @@ module Clowk
       result = client.tokens.verify_with_session(token: current_token)
       status = result&.dig(:session)
 
-      session[Clowk.config.session_key] = stored_session.merge("session_status" => status) if status && stored_session
+      if status && stored_session
+        session[Clowk.config.session_key] = stored_session.merge(
+          "session_status" => status,
+          "session_status_checked_at" => Time.now.to_i
+        )
+      end
 
       status
     rescue Clowk::InvalidTokenError
       nil
+    end
+
+    # Whether the cached status may still be trusted. Timestamped alongside the
+    # payload rather than inside it, so what we hand back stays exactly what the
+    # API returned.
+    def clowk_session_status_fresh?
+      ttl = Clowk.config.session_status_ttl.to_i
+      return false unless ttl.positive?
+
+      checked_at = (stored_session&.dig("session_status_checked_at") ||
+                    stored_session&.dig(:session_status_checked_at)).to_i
+
+      checked_at.positive? && (Time.now.to_i - checked_at) < ttl
     end
   end
 end

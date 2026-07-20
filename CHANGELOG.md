@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-07-20
+
+### Security
+
+- **A token in the query string no longer establishes a session.** `TokenExtractor` read `params[:token]` on *every* request, and `Authenticable` persisted whatever verified — so `GET /anything?token=<valid jwt>` signed the visitor in as that token's subject, bypassing the OAuth callback's `state` check entirely. That is login-CSRF, and it left any token that reached a proxy log or browser history replayable for its full lifetime. Sessions are now established from the `Authorization: Bearer` header or the cookie only; `CallbacksController` still reads the param directly, after validating state.
+
+### Fixed
+
+- `clowk_enforce_session!` was a no-op after its first call. The fetched status was cached into the Rails session with no TTL and no timestamp, so every later call returned the stale cache and revocation was never noticed. Statuses now carry a `session_status_checked_at` stamp and expire — see `config.session_status_ttl` below.
+- `config.enforce_active_session` was declared but never read anywhere: setting it did nothing. It now makes `authenticate_<prefix>!` verify session liveness (still defaulting to `false`, so existing behaviour is unchanged).
+- `prefix_by` is honoured for sign-out. `clowk_sign_out!` kept its canonical name under every prefix, so `config.prefix_by = :user` gave you `current_user` and `authenticate_user!` but no `user_sign_out!`. The prefixed alias is now generated alongside the others.
+
+### Added
+
+- `config.session_status_ttl` (default `300`) — how long a fetched session status stays trusted, in seconds. Set `0` to check on every call.
+
+### Upgrading
+
+Breaking for anyone who authenticated by putting a token in a URL; use the `Authorization` header or let the callback set the cookie. If you set `enforce_active_session = true` expecting a no-op, it now costs one lookup per authentication, cached for `session_status_ttl`.
+
 ## [0.3.3] - 2026-06-21
 
 ### Fixed

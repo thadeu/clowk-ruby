@@ -109,4 +109,104 @@ RSpec.describe Clowk::Authenticable do
     expect { instance.clowk_enforce_session! }.not_to raise_error
     expect(instance.redirect_target).to eq("/clowk/sign_in?return_to=%2Fdashboard")
   end
+
+  describe "token sources" do
+    let(:valid_token) do
+      JWT.encode(
+        payload.merge(iss: Clowk.config.issuer, exp: 1.hour.from_now.to_i),
+        Clowk.config.secret_key,
+        Clowk::JwtVerifier::ALGORITHM
+      )
+    end
+
+    # A token in a query string must never establish a session: it would sign the
+    # visitor in on any path without passing the callback's state check, and stay
+    # replayable wherever the URL got logged.
+    it "refuses to sign in from a token in the query string" do
+      request = instance_double(
+        "Request", format: request_format, fullpath: "/dashboard",
+        params: {"token" => valid_token}, authorization: nil
+      )
+
+      instance = dummy_class.new(request: request)
+
+      expect(instance.clowk_signed_in?).to be(false)
+      expect(instance.current_clowk).to be_nil
+    end
+
+    it "still signs in from a bearer header" do
+      request = instance_double(
+        "Request", format: request_format, fullpath: "/dashboard",
+        params: {}, authorization: "Bearer #{valid_token}", ssl?: false
+      )
+
+      instance = dummy_class.new(request: request)
+
+      expect(instance.clowk_signed_in?).to be(true)
+      expect(instance.current_clowk.email).to eq("user@example.com")
+    end
+  end
+
+  describe "session status caching" do
+    let(:cached) { {"status" => "active", "session_id" => "clk_session_abc"} }
+
+    # No session_id in the payload means resolve_session_status bails before any
+    # network call — so whatever comes back came from the cache, or nowhere.
+    def instance_with(session_status_extras)
+      dummy_class.new(
+        session_data: {:user => payload, "session_status" => cached}.merge(session_status_extras),
+        request: request
+      )
+    end
+
+    it "trusts a cached status inside the TTL" do
+      Clowk.configure { |config| config.session_status_ttl = 300 }
+
+      instance = instance_with("session_status_checked_at" => Time.now.to_i)
+
+      expect(instance.clowk_session_status).to include(status: "active")
+    end
+
+    it "discards a cached status once the TTL has passed" do
+      Clowk.configure { |config| config.session_status_ttl = 300 }
+
+      instance = instance_with("session_status_checked_at" => Time.now.to_i - 600)
+
+      expect(instance.clowk_session_status).to be_nil
+    end
+
+    # The shape written before TTLs existed. Without this, a status cached once
+    # is trusted for the life of the Rails session and enforcement never runs.
+    it "discards a cached status that carries no timestamp" do
+      instance = instance_with({})
+
+      expect(instance.clowk_session_status).to be_nil
+    end
+
+    it "always re-checks when the TTL is zero" do
+      Clowk.configure { |config| config.session_status_ttl = 0 }
+
+      instance = instance_with("session_status_checked_at" => Time.now.to_i)
+
+      expect(instance.clowk_session_status).to be_nil
+    end
+  end
+
+  it "generates a sign-out helper matching the configured prefix_by" do
+    Clowk.configure { |config| config.prefix_by = :clowk_user }
+
+    custom_class = Class.new do
+      include Clowk::Helpers::UrlHelpers
+      include Clowk::Authenticable
+
+      attr_reader :session, :cookies
+
+      def initialize
+        @session = {}
+        @cookies = {}
+      end
+    end
+
+    expect(custom_class.new).to respond_to(:clowk_user_sign_out!)
+  end
 end

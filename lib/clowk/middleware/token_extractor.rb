@@ -17,7 +17,13 @@ module Clowk
 
       attr_reader :request, :token_param, :cookie_key
 
+      # Opt-in only. Reading a token from the query string on every request lets
+      # a link like /anything?token=<jwt> establish a session without ever
+      # passing the callback's `state` check, so callers that establish sessions
+      # pass token_param: nil. The callback reads params itself, after state.
       def token_from_params
+        return if token_param.nil?
+
         params = (request.respond_to?(:params) && request.params) ? request.params : {}
         params[token_param.to_s].presence
       end
