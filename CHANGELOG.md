@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-07-21
+
+### Fixed
+
+- `SDK::Resource#search` — and anything built on it, notably `subdomains.find_by_pk`, which resolves the instance URL from a `publishable_key` — raised `URI::InvalidComponentError`. `Http::Client#build_uri` assigned the whole `"resource/search?query=..."` string (query included) to `URI#path`, which rejects a `?`, and then dropped any query with `base_uri.query = nil`. The query is now split off and set as its own URI component, so search requests build a valid URL and keep their query. This path only ran when a domain was resolved from a publishable key rather than a configured `subdomain_url`, so it went unnoticed until then.
+
 ## [0.4.0] - 2026-07-20
 
 ### Security

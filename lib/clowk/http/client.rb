@@ -137,10 +137,20 @@ module Clowk
 
     def build_uri(path)
       base_uri = URI(base_url)
-      base_uri.path = join_paths(base_uri.path, normalize_path(path))
-      base_uri.query = nil
+      request_path, request_query = split_query(path)
+      base_uri.path = join_paths(base_uri.path, normalize_path(request_path))
+      base_uri.query = request_query
       base_uri.fragment = nil
       base_uri
+    end
+
+    # A request path may arrive with its query already attached (the SDK's
+    # `search` builds "resource/search?query=..."). URI#path= rejects a value
+    # containing "?", so split the query off and set it as its own component
+    # instead of smuggling it through the path.
+    def split_query(path)
+      path_part, _separator, query_part = path.to_s.partition("?")
+      [path_part, query_part.empty? ? nil : query_part]
     end
 
     def normalize_path(path)

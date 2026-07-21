@@ -102,6 +102,29 @@ RSpec.describe Clowk::Http do
     end
   end
 
+  describe "#get with a query string in the path" do
+    it "sets the query as its own URI component rather than smuggling it through the path" do
+      response = Net::HTTPSuccess.new("1.1", "200", "OK")
+      allow(response).to receive(:body).and_return('{"instance":{"url":"https://acme.clowk.dev"}}')
+      allow(response).to receive(:to_hash).and_return({})
+
+      allow(Net::HTTP).to receive(:start).with("api.clowk.dev", 443, use_ssl: true).and_yield(http)
+      allow(http).to receive(:open_timeout=)
+      allow(http).to receive(:read_timeout=)
+      allow(http).to receive(:write_timeout=)
+      allow(http).to receive(:request) do |request|
+        expect(request).to be_a(Net::HTTP::Get)
+        expect(request.path).to eq("/client/v1/instances/search?query=publishable_key%3Apk_test_123")
+        response
+      end
+
+      result = http_client.get("instances/search?query=publishable_key%3Apk_test_123")
+
+      expect(result).to be_success
+      expect(result.body_parsed).to eq({"instance" => {"url" => "https://acme.clowk.dev"}})
+    end
+  end
+
   describe "#post" do
     it "sends JSON and parses the response" do
       response = Net::HTTPSuccess.new("1.1", "200", "OK")
