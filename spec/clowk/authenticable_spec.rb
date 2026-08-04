@@ -209,4 +209,124 @@ RSpec.describe Clowk::Authenticable do
 
     expect(custom_class.new).to respond_to(:clowk_user_sign_out!)
   end
+
+  # An API-only Rails app has neither session nor cookie middleware. Touching
+  # either raises, which is what the gem used to do on every successful bearer
+  # verification.
+  describe "API-only controllers" do
+    let(:api_class) do
+      Class.new do
+        include Clowk::Helpers::UrlHelpers
+        include Clowk::Authenticable
+
+        attr_reader :request, :rendered, :redirect_target
+
+        def initialize(request:)
+          @request = request
+        end
+
+        def session
+          raise ActionDispatch::Request::Session::DisabledSessionError, "disabled"
+        end
+
+        def cookies
+          raise "no cookie middleware"
+        end
+
+        def render(options)
+          @rendered = options
+        end
+
+        def redirect_to(target)
+          @redirect_target = target
+        end
+      end
+    end
+
+    let(:valid_token) do
+      JWT.encode(
+        payload.merge(iss: Clowk.config.issuer, exp: 1.hour.from_now.to_i),
+        Clowk.config.secret_key,
+        Clowk::JwtVerifier::LEGACY_ALGORITHM
+      )
+    end
+
+    let(:bearer_request) do
+      instance_double(
+        "Request", format: request_format, fullpath: "/api/v1/me",
+        params: {}, authorization: "Bearer #{valid_token}", ssl?: true
+      )
+    end
+
+    it "authenticates from a bearer header without a session" do
+      instance = api_class.new(request: bearer_request)
+
+      expect(instance.clowk_signed_in?).to be(true)
+      expect(instance.current_clowk.email).to eq("user@example.com")
+    end
+
+    # The old behaviour wrote a Set-Cookie on every bearer request: useless to a
+    # mobile client and a per-request session write in a stateless API.
+    it "does not try to persist a session or cookie" do
+      instance = api_class.new(request: bearer_request)
+
+      expect { instance.clowk_authenticate! }.not_to raise_error
+    end
+
+    # Without an Accept header the format is not json, and the old code answered
+    # a failed API call with a 302 to a sign-in page the caller cannot use.
+    it "answers 401 JSON even when the format is not json" do
+      unauthenticated = instance_double(
+        "Request", format: request_format, fullpath: "/api/v1/me",
+        params: {}, authorization: nil
+      )
+
+      instance = api_class.new(request: unauthenticated)
+      instance.clowk_authenticate!
+
+      expect(instance.rendered).to include(status: :unauthorized)
+      expect(instance.redirect_target).to be_nil
+    end
+
+    it "signs out without touching the missing stores" do
+      instance = api_class.new(request: bearer_request)
+
+      expect { instance.clowk_sign_out! }.not_to raise_error
+    end
+
+    describe "session status caching" do
+      let(:cache) { ActiveSupport::Cache::MemoryStore.new }
+
+      before do
+        Clowk.configure do |config|
+          config.session_status_cache = cache
+          config.session_status_ttl = 300
+        end
+      end
+
+      after { Clowk.configure { |config| config.session_status_cache = nil } }
+
+      # Without an external store every authenticated request would pay a round
+      # trip to Clowk, because there is no Rails session to cache into.
+      it "reads a cached status from the configured store" do
+        instance = api_class.new(request: bearer_request)
+        key = "clowk:session_status:#{Digest::SHA256.hexdigest(valid_token)}"
+        cache.write(key, {"status" => "active", "session_id" => "clk_session_abc"})
+
+        expect(instance.clowk_session_status).to include(status: "active")
+      end
+
+      it "keys the cache by digest so the raw token never lands in a cache key" do
+        instance = api_class.new(request: bearer_request)
+        cache.write(
+          "clowk:session_status:#{Digest::SHA256.hexdigest(valid_token)}",
+          {"status" => "active"}
+        )
+
+        instance.clowk_session_status
+
+        expect(cache.instance_variable_get(:@data).keys.join).not_to include(valid_token)
+      end
+    end
+  end
 end

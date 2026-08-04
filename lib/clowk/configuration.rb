@@ -25,6 +25,7 @@ module Clowk
     attr_accessor :enforce_active_session
     attr_accessor :on_session_expired
     attr_accessor :session_status_ttl
+    attr_writer :session_status_cache
 
     def initialize
       @api_base_url = "https://api.clowk.dev/api/v1"
@@ -51,6 +52,15 @@ module Clowk
       # which silently turns every later enforcement call into a no-op. Set 0 to
       # check on every call.
       @session_status_ttl = 300
+    end
+
+    # Where API-only apps cache session status, since they have no Rails session
+    # to hang it on. Defaults to Rails.cache when Rails is loaded; set to nil to
+    # check with Clowk on every authenticated request.
+    def session_status_cache
+      return @session_status_cache if defined?(@session_status_cache)
+
+      @session_status_cache = (defined?(::Rails) && ::Rails.respond_to?(:cache)) ? ::Rails.cache : nil
     end
 
     # Defaults to the publishable key, which is what Clowk stamps into `aud`.

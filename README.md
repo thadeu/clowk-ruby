@@ -112,6 +112,32 @@ Important settings:
 | `mount_path` | Local mount prefix used by helper path generation. Default: `/clowk`. |
 | `callback_path` | Callback route Clowk redirects back to. Default: `/clowk/oauth/callback`. |
 | `http_logger` | Optional logger used by `Clowk::Http`. |
+| `session_status_cache` | Where API-only apps cache session status. Defaults to `Rails.cache`. |
+
+### API-only Rails apps
+
+`Clowk::Authenticable` works in `ActionController::API` controllers with no
+extra setup — no session middleware, no cookie middleware:
+
+```ruby
+class ApplicationController < ActionController::API
+  include Clowk::Authenticable
+
+  before_action :authenticate_clowk!
+end
+```
+
+What changes in that mode:
+
+- **Nothing is written back.** A bearer request produces no `Set-Cookie` and no
+  session write. There is no browser to hold a cookie, a mobile client ignores
+  it, and writing a session per request defeats the point of being stateless.
+- **Failures are always 401 JSON**, never a redirect — including when the
+  request carries no `Accept: application/json`. A 302 to a sign-in page is
+  useless to an API caller.
+- **Session status is cached in `session_status_cache`** instead of the Rails
+  session, keyed by a digest of the token. Without it, `enforce_active_session`
+  would cost a round trip to Clowk on every authenticated request.
 
 ### Token verification
 
