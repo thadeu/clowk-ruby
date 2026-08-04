@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-08-04
+
+### Security
+
+- **Tokens are no longer verified with the signing secret.** `JwtVerifier` hardcoded `HS256` and checked signatures with `secret_key` — the same string the gem sends as an API credential in `X-Clowk-Secret-Key`. Any app holding its own key could therefore mint tokens it should only have been able to verify, and signing material travelled on the wire with every API call. `RS256` tokens are now verified against Clowk's published key set; the private half never leaves the auth server.
+- **The `aud` claim is checked on `RS256` tokens.** Under a public key every consumer trusts, `aud` is the only thing keeping a token minted for one app out of another app's API — the per-instance shared secret used to prevent that by accident. `config.audience` defaults to `publishable_key`, so the check is on without extra configuration; set it to `false` or `nil` to skip it.
+
+### Added
+
+- `Clowk::Jwks` — fetches and caches Clowk's public keys. Verification must not cost a round trip, so the key set is cached process-wide; a `kid` the cache has not seen triggers a single refetch, which is what makes key rotation invisible rather than an outage. That refetch is throttled so a forged `kid` cannot turn one bad token into a stampede on the auth server, while a cold-cache fetch does not spend that budget — a rotation is still picked up on the very next token.
+- `config.jwks_url` — where to fetch the key set. Defaults to `<auth domain>/.well-known/jwks.json`.
+- `config.audience` — expected `aud` on `RS256` tokens. Defaults to `publishable_key`.
+- `config.session_status_cache` — where API-only apps cache session status, keyed by a digest of the token so the raw token never lands somewhere loggable. Defaults to `Rails.cache`; set to `nil` to check with Clowk on every authenticated request.
+- **API-only Rails support.** `Clowk::Authenticable` now works in `ActionController::API` controllers with no session or cookie middleware. `Clowk::Engine` hooks `:action_controller_api`, so `clowk_sign_in_path` exists on the unauthenticated path instead of raising `NoMethodError`.
+
+### Fixed
+
+- A bearer request no longer comes back with a `Set-Cookie`. `persist_clowk_session` wrote a session and a cookie on every successful verification, which raises without the middleware, is ignored by mobile clients, and defeats the point of a stateless API.
+- API-only apps get `401` JSON on authentication failure regardless of the `Accept` header. The fallback previously keyed off `request.format.json?`, so an API call without an explicit `Accept` was answered with a `302` to a sign-in page the caller cannot use.
+- `stored_session` returns `nil` rather than an empty hash when there is no session store. `nil.respond_to?(:to_h)` is true, so the old guard turned a missing store into a truthy value and every caller branching on "is there a session?" silently took the session path.
+
+### Upgrading
+
+Nothing to change for existing apps: `HS256` tokens still verify against `secret_key`, and `audience` is not enforced on that path because tokens issued before the claim existed do not carry it.
+
+Two things matter once your Clowk server starts issuing `RS256`. Make sure `publishable_key` is configured — with only `secret_key` set, `audience` resolves to `nil` and the check is skipped, which fails open. And the gem must be able to reach the JWKS endpoint; set `jwks_url` explicitly if it is not derivable from `publishable_key` or `subdomain_url`.
+
+`JwtVerifier::ALGORITHM` still exists as an alias of `LEGACY_ALGORITHM`, but it no longer describes what the verifier accepts.
+
 ## [0.4.1] - 2026-07-21
 
 ### Fixed
