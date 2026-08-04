@@ -7,4 +7,6 @@ ClowkSpecApp.routes.draw do
   get "/dashboard", to: ->(_env) { [200, {"Content-Type" => "text/plain"}, ["dashboard"]] }
   get "/after_sign_in", to: ->(_env) { [200, {"Content-Type" => "text/plain"}, ["after_sign_in"]] }
   get "/after_sign_out", to: ->(_env) { [200, {"Content-Type" => "text/plain"}, ["after_sign_out"]] }
+
+  get "/api/me", to: "clowk_spec_api#show"
 end

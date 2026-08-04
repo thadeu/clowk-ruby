@@ -116,11 +116,18 @@ module Clowk
 
     private
 
-    # An API-only app has no session middleware, so there is nowhere to redirect
-    # a browser to and no way to come back. Redirecting there would answer a
-    # failed API call with a 302 to a sign-in page the caller cannot use.
+    # ActionController::API is the reliable signal, and it has to be checked
+    # directly. Probing `session` does not work: with no session middleware
+    # loaded, `request.session` still returns a Session object that responds to
+    # `[]` and reads as nil — writes vanish, but nothing raises. Inferring
+    # "there is a session, so this is a browser" from that answered every API
+    # call with a 302 to a sign-in page the caller cannot follow.
+    def clowk_api_only?
+      defined?(ActionController::API) && is_a?(ActionController::API)
+    end
+
     def clowk_api_request?
-      clowk_session_store.nil? || request.format.json?
+      clowk_api_only? || clowk_session_store.nil? || request.format.json?
     end
 
     def clowk_handle_unauthenticated
@@ -139,18 +146,24 @@ module Clowk
       end
     end
 
-    # Probed rather than assumed: accessing `session` without the middleware
-    # raises, and `respond_to?` is true either way because the method is
-    # delegated to the request.
+    # nil in API-only controllers. Not because `session` raises there — it does
+    # not, see clowk_api_only? — but because whatever it hands back writes to
+    # nowhere, and callers branch on this to decide whether persisting is worth
+    # doing at all.
     def clowk_session_store
       return @clowk_session_store if defined?(@clowk_session_store)
 
-      @clowk_session_store = begin
-        store = session
-        store.respond_to?(:[]) ? store : nil
-      rescue
-        nil
-      end
+      @clowk_session_store =
+        if clowk_api_only?
+          nil
+        else
+          begin
+            store = session
+            store.respond_to?(:[]) ? store : nil
+          rescue
+            nil
+          end
+        end
     end
 
     def clowk_cookie_jar

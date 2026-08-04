@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-08-04
+
+### Fixed
+
+- **API-only apps got a `302` instead of a `401`.** 0.5.0 decided a request was an API call by probing whether `session` was reachable, on the assumption that it raises without the session middleware. It does not: with no middleware loaded, `request.session` still returns an `ActionDispatch::Request::Session` that responds to `[]` and reads as `nil` — writes go nowhere, but nothing raises. So a real `ActionController::API` looked like a browser, and every unauthenticated call was answered with a redirect to a sign-in page the caller cannot follow. API mode is now detected from `ActionController::API` directly.
+- The same mistake meant a bearer request in an API-only app still wrote a session and came back with `Set-Cookie`. It no longer does.
+
+The 0.5.0 specs covered this with a dummy class whose `session` raised, which is not how Rails behaves — the tests passed against a model of the framework rather than the framework. Coverage now runs through a real `ActionController::API` in the test app; five of those seven examples fail against 0.5.0.
+
 ## [0.5.0] - 2026-08-04
 
 ### Security
