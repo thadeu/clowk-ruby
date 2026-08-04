@@ -12,7 +12,9 @@ module Clowk
     attr_accessor :http_retry_attempts
     attr_accessor :http_retry_interval
     attr_accessor :http_write_timeout
+    attr_writer :audience
     attr_accessor :issuer
+    attr_accessor :jwks_url
     attr_accessor :mount_path
     attr_accessor :publishable_key
     attr_accessor :prefix_by
@@ -49,6 +51,13 @@ module Clowk
       # which silently turns every later enforcement call into a no-op. Set 0 to
       # check on every call.
       @session_status_ttl = 300
+    end
+
+    # Defaults to the publishable key, which is what Clowk stamps into `aud`.
+    # Consumers already configure that key, so audience checking is on by
+    # default rather than something you have to know to switch on.
+    def audience
+      @audience.nil? ? @publishable_key : @audience
     end
 
     def after_sign_in_path

@@ -69,7 +69,7 @@ end
 The callback flow includes:
 
 - session-backed `state` validation
-- JWT verification with your instance `secret_key`
+- JWT verification against Clowk's published keys (RS256), falling back to your instance `secret_key` for legacy HS256 tokens
 - internal-only redirect sanitization
 - session reset before persisting the authenticated user
 - `httponly` cookie persistence with `SameSite=Lax`
@@ -103,13 +103,30 @@ Important settings:
 
 | Setting | Purpose |
 | --- | --- |
-| `secret_key` | Required. Used to verify JWT signatures. |
-| `publishable_key` | Preferred for auth URL resolution. The gem resolves the latest instance URL from it before sign in/sign up. |
+| `secret_key` | Verifies legacy HS256 tokens. Not needed to verify RS256 tokens. |
+| `publishable_key` | Preferred for auth URL resolution. The gem resolves the latest instance URL from it before sign in/sign up. Also the default `audience`. |
 | `subdomain_url` | Fallback auth domain when you do not want publishable-key-based resolution. |
+| `jwks_url` | Where to fetch Clowk's public keys. Defaults to `<auth domain>/.well-known/jwks.json`. |
+| `audience` | Expected `aud` claim on RS256 tokens. Defaults to `publishable_key`. Set to `nil` to skip the check. |
 | `prefix_by` | Prefix used to generate helper names. Default: `:clowk`. |
 | `mount_path` | Local mount prefix used by helper path generation. Default: `/clowk`. |
 | `callback_path` | Callback route Clowk redirects back to. Default: `/clowk/oauth/callback`. |
 | `http_logger` | Optional logger used by `Clowk::Http`. |
+
+### Token verification
+
+Tokens signed with `RS256` are verified against Clowk's public key set, fetched
+from `jwks_url` and cached in memory. The `kid` header selects the key, and a
+`kid` the cache has not seen triggers a single refetch — that is what makes key
+rotation invisible instead of an outage.
+
+Because every consumer trusts the same public key under RS256, the `aud` claim
+is what keeps a token minted for one app from verifying in another. It defaults
+to your `publishable_key`, so the check is on without extra configuration.
+
+Tokens signed with `HS256` still verify against `secret_key`, so tokens issued
+before Clowk migrated to RS256 keep working until they expire. Audience is not
+enforced on that path: those tokens predate the claim.
 
 Auth URL resolution priority:
 
