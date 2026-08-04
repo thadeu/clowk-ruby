@@ -327,6 +327,71 @@ RSpec.describe Clowk::Authenticable do
 
         expect(cache.instance_variable_get(:@data).keys.join).not_to include(valid_token)
       end
+
+      it "writes a freshly fetched status into the store" do
+        sdk_client = double("Clowk::SDK::Client")
+        tokens = double("Clowk::SDK::Token")
+        allow(Clowk::SDK::Client).to receive(:new).and_return(sdk_client)
+        allow(sdk_client).to receive(:tokens).and_return(tokens)
+        allow(tokens).to receive(:verify_with_session)
+          .and_return({session: {status: "active", session_id: "clk_session_abc"}})
+
+        token_with_session = JWT.encode(
+          payload.merge(iss: Clowk.config.issuer, session_id: "clk_session_abc", exp: 1.hour.from_now.to_i),
+          Clowk.config.secret_key, Clowk::JwtVerifier::LEGACY_ALGORITHM
+        )
+        request = instance_double(
+          "Request", format: request_format, fullpath: "/api/v1/me",
+          params: {}, authorization: "Bearer #{token_with_session}", ssl?: true
+        )
+
+        api_class.new(request: request).clowk_session_status
+
+        key = "clowk:session_status:#{Digest::SHA256.hexdigest(token_with_session)}"
+        expect(cache.read(key)).to include(status: "active")
+      end
+
+      # Without a store there is nowhere to cache, but authentication must still
+      # work — it just pays the round trip every time.
+      it "still resolves status with caching switched off" do
+        Clowk.configure { |config| config.session_status_cache = nil }
+
+        sdk_client = double("Clowk::SDK::Client")
+        tokens = double("Clowk::SDK::Token")
+        allow(Clowk::SDK::Client).to receive(:new).and_return(sdk_client)
+        allow(sdk_client).to receive(:tokens).and_return(tokens)
+        allow(tokens).to receive(:verify_with_session)
+          .and_return({session: {status: "active"}})
+
+        token_with_session = JWT.encode(
+          payload.merge(iss: Clowk.config.issuer, session_id: "clk_session_abc", exp: 1.hour.from_now.to_i),
+          Clowk.config.secret_key, Clowk::JwtVerifier::LEGACY_ALGORITHM
+        )
+        request = instance_double(
+          "Request", format: request_format, fullpath: "/api/v1/me",
+          params: {}, authorization: "Bearer #{token_with_session}", ssl?: true
+        )
+
+        expect(api_class.new(request: request).clowk_session_status).to include(status: "active")
+      end
+    end
+
+    # Regression: `nil.respond_to?(:to_h)` is true, so guarding on that alone
+    # turned a missing store into an empty hash — truthy — and every caller that
+    # branched on "is there a session?" silently took the session path.
+    describe "missing session store" do
+      it "reports no stored session rather than an empty hash" do
+        instance = api_class.new(request: bearer_request)
+
+        expect(instance.send(:stored_session)).to be_nil
+      end
+
+      it "reports the store itself as absent" do
+        instance = api_class.new(request: bearer_request)
+
+        expect(instance.send(:clowk_session_store)).to be_nil
+        expect(instance.send(:clowk_cookie_jar)).to be_nil
+      end
     end
   end
 end
