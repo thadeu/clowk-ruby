@@ -405,4 +405,4 @@ Its job is to make the Rails side of Clowk integration predictable:
 
 ## License
 
-AGPL-3.0. See `LICENSE`.
+MIT. See `LICENSE`.
