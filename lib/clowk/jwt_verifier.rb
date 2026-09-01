@@ -11,8 +11,11 @@ module Clowk
     # LEGACY_ALGORITHM — this no longer describes what the verifier accepts.
     ALGORITHM = LEGACY_ALGORITHM
 
-    def initialize(secret_key: Clowk.config.secret_key, issuer: Clowk.config.issuer,
-      audience: Clowk.config.audience, jwks_url: Clowk.config.jwks_url)
+    # Credentials come from Clowk.credentials, which is the scoped override when
+    # one is in force and the boot configuration otherwise. `issuer` stays on
+    # config: it describes the token format, not which instance issued it.
+    def initialize(secret_key: Clowk.credentials.secret_key, issuer: Clowk.config.issuer,
+      audience: Clowk.credentials.audience, jwks_url: Clowk.credentials.jwks_url)
       @secret_key = secret_key
       @issuer = issuer
       @audience = audience

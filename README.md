@@ -107,12 +107,100 @@ Important settings:
 | `publishable_key` | Preferred for auth URL resolution. The gem resolves the latest instance URL from it before sign in/sign up. Also the default `audience`. |
 | `subdomain_url` | Fallback auth domain when you do not want publishable-key-based resolution. |
 | `jwks_url` | Where to fetch Clowk's public keys. Defaults to `<auth domain>/.well-known/jwks.json`. |
-| `audience` | Expected `aud` claim on RS256 tokens. Defaults to `publishable_key`. Set to `nil` to skip the check. |
+| `audience` | Expected `aud` claim on RS256 tokens. Defaults to `publishable_key`. Set to `false` to skip the check. |
 | `prefix_by` | Prefix used to generate helper names. Default: `:clowk`. |
 | `mount_path` | Local mount prefix used by helper path generation. Default: `/clowk`. |
 | `callback_path` | Callback route Clowk redirects back to. Default: `/clowk/oauth/callback`. |
 | `http_logger` | Optional logger used by `Clowk::Http`. |
 | `session_status_cache` | Where API-only apps cache session status. Defaults to `Rails.cache`. |
+
+### Runtime credentials
+
+`Clowk.configure` is the right place for credentials that are a boot constant.
+Some apps do not have that: an operator pastes a publishable key into a settings
+screen and expects sign-in to work on the next request, or one process serves
+several tenants and each one has its own instance.
+
+For those, there is one method — `Clowk.with_credentials`. It scopes the
+credentials to a block instead of the process:
+
+```ruby
+Clowk.with_credentials(publishable_key: "pk_live_…") do
+  # sign-in URLs, JWKS, token verification and the SDK client
+  # all resolve against that instance in here
+end
+```
+
+`secret_key` and `subdomain_url` go in the same way and are both optional —
+RS256 needs no secret, and the auth domain is resolved from the publishable key
+when absent.
+
+In a Rails controller, wire it with an `around_action` you name yourself:
+
+```ruby
+class ApplicationController < ActionController::Base
+  include Clowk::Authenticable
+
+  around_action :require_tenant_key!
+  before_action :authenticate_clowk_user!
+
+  private
+
+  def require_tenant_key!(&)
+    Clowk.with_credentials(publishable_key: Tenant.current.key, &)
+  end
+end
+```
+
+How you spell the block is yours too — `(&)`, `(&block)`, `(&action)`, or
+`{ yield }`. The examples here use `(&)`; nothing in the gem depends on it.
+
+`:allow_own_credentials!`, `:use_workspace_sso!` — the gem does not care, and
+never looks for a method named its way. Where the credentials come from is
+equally yours: an environment variable, a settings row, the subdomain, a header.
+
+`nil` runs the block against the boot configuration, so a request with no tenant
+needs no branch at the call site:
+
+```ruby
+def require_tenant_key!(&)
+  Clowk.with_credentials(Tenant.current&.clowk_credentials, &)
+end
+```
+
+That second form takes a `Clowk::Credentials` object, for callers that already
+have one — a row that knows how to describe itself, say. The keyword form builds
+it for you, so the common case never has to name the class.
+
+The same call works in a job, a rake task or a script; there is nothing
+controller-specific about it, and `Clowk::Authenticable` deliberately adds no
+second name for the same idea.
+
+Nothing installs the filter for you. `around_action` has to wrap
+`authenticate_clowk_user!`, and where it sits among your own filters is a
+decision only your app can make — a gem that registers callbacks on your
+controller is one you have to read to know what runs.
+
+`Clowk.credentials` is the reader: the scoped value when one is in force, the
+boot configuration otherwise. An app that never scopes anything behaves exactly
+as it did before this existed, and explicitly passed arguments
+(`Clowk::SDK::Client.new(secret_key: …)`) still win over both.
+
+**There is no `Clowk.secret_key = …` setter, on purpose.** A setter has no
+lifetime, so the first request that raises between the assignment and its reset
+leaves that key installed process-wide — and the secret key mints HS256 tokens
+for any subject, on the verification path that does not check `aud`. A leaked
+scope would be an authentication bypass rather than an untidy configuration. The
+block's `ensure` is what makes the lifetime a property of the API instead of the
+caller's discipline. Scopes nest, and the inner one restores the outer.
+
+Scoping is fiber-based (`ActiveSupport::IsolatedExecutionState`), so it survives
+streaming responses and async adapters rather than reverting to the global
+halfway through a request.
+
+The caches were already built for this: `Clowk::Jwks` keys by URL and
+`Clowk::Subdomain` keys by publishable key, so switching instances at runtime
+selects a different cache entry instead of poisoning the previous one.
 
 ### API-only Rails apps
 
@@ -258,6 +346,27 @@ Mounted routes exposed by the engine:
 - `/clowk/oauth/callback`
 
 When you mount the engine elsewhere, the same route set is exposed under your chosen prefix.
+
+### Turbo and the sign-in redirect
+
+`/clowk/sign_in` answers with a redirect to your Clowk instance, which is a
+different origin. **Turbo cannot follow a cross-origin redirect.** It does not
+raise and it does not warn: the fetch is dropped, the page stays exactly as it
+was, and the submit reads as a button that does nothing. A later manual refresh
+works, which makes it look like flakiness rather than a missing opt-out.
+
+Links are fine. A **form** that ends up at `/sign_in` — a settings screen that
+turns sign-in on, say — has to opt out so the browser performs the navigation
+itself:
+
+```erb
+<%= form_with url: clowk.sign_in_path, method: :get, data: { turbo: false } do |form| %>
+  <%= form.submit 'Sign in' %>
+<% end %>
+```
+
+The same applies to any of your own actions that redirect to `/sign_in` at the
+end: the chain still terminates cross-origin.
 
 ## Token sources
 

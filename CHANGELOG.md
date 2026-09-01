@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-09-01
+
+### Added
+
+- **`Clowk.with_credentials`** — the settings that name an *instance* (`publishable_key`, `secret_key`, `subdomain_url`, `jwks_url`, plus the `audience` derived from the key) can now be scoped to a block instead of the process. Until now the only way to serve an app whose credentials are not a boot constant — an operator pasting a publishable key into a settings screen, or one process serving several tenants — was to call `Clowk.configure` from inside a request, mutating process-wide state from request scope with Puma threads in attendance.
+
+  ```ruby
+  around_action :require_tenant_key!
+
+  def require_tenant_key!(&)
+    Clowk.with_credentials(publishable_key: Tenant.current.key, &)
+  end
+  ```
+
+  One method is the whole surface. Attributes go straight in, so the common case never names a class; a prebuilt `Clowk::Credentials` object is accepted for callers that already have one; and `nil` runs the block against the boot configuration, so "this request has no tenant" needs no branch. It is not controller-specific — the same call works in a job or a rake task — and nothing installs a callback: the `around_action` is named and placed by the app, because it has to wrap `authenticate_clowk_user!` and only the app knows what else belongs inside. A block and not a setter, because credentials that are set and never unset are precisely the hazard this exists to avoid: `secret_key` mints HS256 tokens for any subject on the path that does not check `aud`, so a scope outliving its request would be an authentication bypass rather than untidy configuration.
+- `Clowk::Credentials` — the value object behind it, carrying those settings together. Separate setters would make a half-swapped state reachable between two assignments, and a publishable key from one instance beside a secret key from another is not a partial configuration, it is a broken one.
+- `Clowk.credentials` — the reader everything internal now goes through. The scoped value when one is in force, `Clowk.configure`'s otherwise.
+
+### Changed
+
+- **`required_ruby_version` is now `>= 3.1`**, down from `>= 3.3`. 3.1 is the real floor of the code — `Clowk::SDK::Client#method_missing` declares an anonymous block parameter, which arrived in 3.1 — and the gemspec was simply stricter than it needed to be. `Clowk::Credentials` is a frozen `Struct` rather than a `Data` for the same reason: `Data` is 3.2. The freeze is what keeps the value object immutable by hand, which matters because credentials are installed into a scope and read from four places while a request runs. CI now runs 3.1 through 3.4 instead of 3.3 and 3.4, and `.standard.yml` targets 3.1 — without that the linter reports `keyword_init: true` as redundant, which it is on 3.2+ and is not on 3.1.
+
+### Fixed
+
+- **`audience` is now derived from the credentials in force, not from the global.** It defaults to the publishable key, so reading it off `Clowk.config` while the key came from a scoped tenant would have verified one tenant's token against another tenant's expectation — silently, on the happy path. `Clowk::Credentials` settles it at construction, so `to_h` and `==` agree with what callers see.
+- README said `audience: nil` skips the `aud` check. It does not — `nil` means "derive from `publishable_key`", and only `false` switches the check off (`nil` skips solely when there is no publishable key either). The 0.5.0 note below has the same error and is left as written, being a record of what was said at the time.
+
+### Notes
+
+No behaviour changes for apps that configure once at boot: `Clowk.credentials` falls back to `Clowk.config`, and explicitly passed arguments still win over both. `Clowk.reset!` also clears a scoped override.
+
+Known sharp edge, unchanged and now documented rather than fixed: `Clowk::SessionsController#new` answers with a cross-origin redirect (`allow_other_host: true`). A Turbo-driven form submission cannot follow that — the fetch is dropped and the page silently does nothing. Point a form at `/sign_in` with `data: { turbo: false }`, or use a plain link.
+
 ## [0.5.1] - 2026-08-04
 
 ### Fixed

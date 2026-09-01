@@ -30,7 +30,7 @@ module Clowk
         end
       end
 
-      def key_for(kid, jwks_url: Clowk.config.jwks_url)
+      def key_for(kid, jwks_url: Clowk.credentials.jwks_url)
         url = jwks_url || default_url
 
         key = lookup(url, kid)
@@ -48,7 +48,7 @@ module Clowk
       end
 
       def default_url
-        base = Clowk.config.subdomain_url || Clowk::Subdomain.resolve_url!
+        base = Clowk.credentials.subdomain_url || Clowk::Subdomain.resolve_url!
 
         "#{base.to_s.chomp("/")}#{WELL_KNOWN_PATH}"
       rescue ConfigurationError

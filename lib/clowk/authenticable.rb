@@ -55,6 +55,26 @@ module Clowk
       Clowk::Authenticable.install_dynamic_methods(self)
     end
 
+    # Per-request credentials — for apps whose keys are not a boot constant:
+    # an operator pastes a publishable key into a settings screen, or one
+    # process serves several tenants.
+    #
+    # There is no method here for that, on purpose. `Clowk.with_credentials`
+    # does it, works the same in a job or a rake task, and one name is one name
+    # to remember:
+    #
+    #   around_action :require_tenant_key!
+    #
+    #   def require_tenant_key!(&)
+    #     Clowk.with_credentials(publishable_key: Tenant.current.key, &)
+    #   end
+    #
+    # Name that filter whatever your app calls the idea, and spell the block
+    # however you like — `(&)`, `(&block)`, `{ yield }`. Nothing in this gem
+    # looks for a method of its own naming, and no macro installs a callback
+    # for you. `around_action` has to wrap `authenticate_clowk_user!`, and
+    # where it sits among your own filters is a decision only your app can make.
+
     def clowk_current_resource
       @clowk_current_resource ||= begin
         payload = stored_user_payload || verified_request_payload
@@ -241,9 +261,11 @@ module Clowk
       resource = clowk_current_resource
 
       return unless resource&.session_id
-      return unless Clowk.config.secret_key.present?
+      secret_key = Clowk.credentials.secret_key
 
-      client = Clowk::SDK::Client.new(secret_key: Clowk.config.secret_key)
+      return unless secret_key.present?
+
+      client = Clowk::SDK::Client.new(secret_key: secret_key)
       result = client.tokens.verify_with_session(token: current_token)
       status = result&.dig(:session)
 

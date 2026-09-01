@@ -116,6 +116,94 @@ Clowk.configure do |config|
 end
 ```
 
+### Scoped credentials
+
+Split the settings in two. Most of them describe the HOST — where the callback
+lives, how long HTTP waits, what the helpers are called — and are decided once,
+at boot. Five describe WHICH INSTANCE is answering:
+
+| Setting | Note |
+|---|---|
+| `publishableKey` | also the default `audience` |
+| `secretKey` | |
+| `subdomainUrl` | |
+| `jwksUrl` | |
+| `audience` | derived from `publishableKey` when not set |
+
+Those five must be resolvable **per request**, not only per process. Two real
+shapes need it and neither is exotic: an app that lets an operator paste a
+publishable key into a settings screen and expects sign-in to work on the next
+request, and one process serving several tenants.
+
+Every SDK must therefore provide:
+
+- a **credentials value object** carrying those five together — separate setters
+  make a half-swapped state reachable between two assignments, and a
+  publishable key from one instance beside a secret key from another is not a
+  partial configuration, it is a broken one;
+- a **scoped reader** that internal code uses instead of the global — in Ruby,
+  `Clowk.credentials`, falling back to the boot configuration so an SDK
+  consumer who never scopes anything pays nothing;
+- a **scoped runner**, not a setter.
+
+```ruby
+# Ruby (reference)
+Clowk.with_credentials(publishable_key: pk) do
+  # sign-in URLs, JWKS, verification and the API client resolve against
+  # that instance in here
+end
+```
+
+The runner takes a callback and restores the previous value on the way out,
+**including when the callback raises**. This is a security requirement, not
+ergonomics: `secretKey` mints HS256 tokens for any subject on the verification
+path that does not check `aud`, so a scope that leaks past its intended
+lifetime is an authentication bypass. A bare setter cannot express a lifetime
+and must not be offered.
+
+Use the language's request-scoped storage, not a global: fiber-local in Ruby
+(`ActiveSupport::IsolatedExecutionState`), `AsyncLocalStorage` in Node, a
+context value in Go, `contextvars` in Python.
+
+The framework integration layer exposes this as **one function that takes the
+credentials and wraps the host's handler** — never as a macro, decorator or
+hook named a particular way, and never as something that registers middleware on
+the host's behalf. The SDK must not require a method, class or symbol of its own
+naming to exist in the host: where the credentials come from, and what the
+host's own wrapper is called, are the host's business.
+
+The wrapper must enclose the authentication step, and where it sits among the
+host's other middleware is the host's decision. Accept a null credential and run
+the handler against the boot configuration, so a request with no tenant needs no
+branch at the call site.
+
+Expose **one** name for this. Two — a module function and a framework-specific
+twin — is one the user can forget, and a second way to spell the same idea is a
+second thing to document, test and keep honest. Accept plain attributes as well
+as a credentials object, so the common call never has to reach for the class.
+
+```ruby
+# Ruby (reference) — the filter's name is the app's, not the SDK's
+around_action :require_tenant_key!
+
+def require_tenant_key!(&)
+  Clowk.with_credentials(publishable_key: tenant.key, &)
+end
+```
+
+In an Express or Koa SDK that is middleware the app mounts in the order it
+chooses; in Go, a handler wrapper the app composes itself.
+
+Two constraints that fall out of this:
+
+1. **Derive `audience` from the credentials in force, never from the global.**
+   A scoped publishable key checked against a global audience verifies one
+   tenant's token against another tenant's expectation, silently.
+2. **Key every cache by what identifies the instance**, not by process — the
+   JWKS cache by URL, the subdomain cache by publishable key. Then switching
+   instances at runtime selects a different entry instead of poisoning the
+   previous one.
+
 ---
 
 ## 2. Error hierarchy

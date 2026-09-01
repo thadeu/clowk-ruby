@@ -47,8 +47,8 @@ module Clowk
     end
 
     def initialize(options = {})
-      @publishable_key = options.fetch(:publishable_key, Clowk.config.publishable_key)
-      @subdomain_url = options.fetch(:subdomain_url, Clowk.config.subdomain_url)
+      @publishable_key = options.fetch(:publishable_key, Clowk.credentials.publishable_key)
+      @subdomain_url = options.fetch(:subdomain_url, Clowk.credentials.subdomain_url)
     end
 
     def resolve_url!

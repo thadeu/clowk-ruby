@@ -29,10 +29,15 @@ module Clowk
 
     def reset!
       Subdomain.clear_cache! if defined?(Subdomain)
+      ActiveSupport::IsolatedExecutionState[:clowk_credentials] = nil
       @config = Configuration.new
     end
   end
 end
+
+# After the module body: Credentials reopens `class << self` to add
+# `credentials` and `with_credentials`, so the module has to exist first.
+require_relative "clowk/credentials"
 
 require_relative "clowk/current"
 require_relative "clowk/http/response"

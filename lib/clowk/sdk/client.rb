@@ -7,8 +7,8 @@ module Clowk
     class Client
       def initialize(options = {})
         @api_base_url = options.fetch(:api_base_url, nil).presence || Clowk.config.api_base_url
-        @secret_key = options.fetch(:secret_key, Clowk.config.secret_key)
-        @publishable_key = options.fetch(:publishable_key, Clowk.config.publishable_key)
+        @secret_key = options.fetch(:secret_key, Clowk.credentials.secret_key)
+        @publishable_key = options.fetch(:publishable_key, Clowk.credentials.publishable_key)
       end
 
       def method_missing(method_name, *, **, &)
