@@ -5,6 +5,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-09-21
+
+### Added
+
+- **`clowk_require_fresh_session`** — a controller macro that demands a live answer from Clowk
+  before the actions it names, whatever a cached status says.
+
+  ```ruby
+  class ApiKeysController < ApplicationController
+    clowk_require_fresh_session only: [:create, :update, :destroy]
+  end
+  ```
+
+  It takes the same options as `before_action`. Everything not named keeps the cached check, which
+  is the point: an app pays for a round trip on the few actions it cannot undo, and nowhere else.
+  `clowk_enforce_fresh_session!` is the same thing as a method, and `clowk_session_status` /
+  `clowk_session_active?` now take `force:` for callers that want the answer rather than the
+  enforcement.
+
+  Until now there was no way to bypass the cache for one call, so an app that needed a genuinely
+  fresh check anywhere had to set `session_status_ttl = 0` and pay a round trip on every page — or
+  rebuild the whole cadence itself, which is what the one app that needed it did.
+
+- **`config.max_session_age`** — a local ceiling, in seconds, that Clowk plays no part in. Past it
+  the session ends without a round trip. `nil` (the default) leaves Clowk as the only authority.
+  It is the other half of failing open: without a ceiling, a permanently unreachable broker means a
+  session that never ends.
+
+- **`config.fail_open_on_broker_error`** (default `true`) — when the liveness check cannot be made
+  at all, the session is left standing and checked again on the next request. A blip on the way to
+  a single droplet must not sign everyone out. Only network failures count; anything else still
+  raises, because a bug must not read as "the session is probably fine". Set it to `false` to fail
+  closed.
+
+### Changed
+
+- Expiry now takes one route, whichever end it came from — the broker said inactive, or the local
+  ceiling passed. `config.on_session_expired` sees both.
+
+### Upgrading
+
+Nothing to change. The new settings are off or default to today's behaviour, and the existing
+methods keep their signatures.
+
+An app that set `session_status_ttl = 0` to guarantee freshness can now give the ordinary check a
+real TTL and mark the handful of actions that need more:
+
+```ruby
+config.session_status_ttl = 15.minutes
+config.max_session_age = 12.hours
+```
+
 ## [0.6.1] - 2026-09-21
 
 ### Fixed

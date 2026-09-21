@@ -25,6 +25,8 @@ module Clowk
     attr_accessor :enforce_active_session
     attr_accessor :on_session_expired
     attr_accessor :session_status_ttl
+    attr_accessor :max_session_age
+    attr_accessor :fail_open_on_broker_error
     attr_writer :session_status_cache
 
     def initialize
@@ -52,6 +54,16 @@ module Clowk
       # which silently turns every later enforcement call into a no-op. Set 0 to
       # check on every call.
       @session_status_ttl = 300
+
+      # A local ceiling the broker plays no part in, so a permanently
+      # unreachable Clowk cannot keep a session alive forever — the other half
+      # of failing open. nil leaves the broker as the only authority.
+      @max_session_age = nil
+
+      # A network blip must not sign everyone out. When the liveness check
+      # cannot be made at all, the session is left standing and checked again on
+      # the next request; max_session_age is what bounds that.
+      @fail_open_on_broker_error = true
     end
 
     # Where API-only apps cache session status, since they have no Rails session

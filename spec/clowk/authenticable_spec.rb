@@ -440,4 +440,172 @@ RSpec.describe Clowk::Authenticable do
       end
     end
   end
+  describe "freshness (0.7)" do
+    let(:tokens) { instance_double(Clowk::SDK::Token) }
+
+    def broker(status)
+      sdk_client = double("Clowk::SDK::Client")
+
+      allow(Clowk::SDK::Client).to receive(:new).and_return(sdk_client)
+      allow(sdk_client).to receive(:tokens).and_return(tokens)
+      allow(tokens).to receive(:verify_with_session).and_return({session: status})
+    end
+
+    def signed_in(extras = {})
+      dummy_class.new(
+        session_data: {user: payload.merge("session_id" => "clk_session_abc")}.merge(extras),
+        request: request
+      )
+    end
+
+    before { Clowk.configure { |config| config.secret_key = "sk_test" } }
+
+    describe "forcing a check" do
+      before { Clowk.configure { |config| config.session_status_ttl = 300 } }
+
+      it "takes the cached status by default, without asking Clowk" do
+        broker({status: "active", session_id: "clk_session_abc"})
+
+        instance = signed_in("session_status" => {"status" => "revoked"},
+          "session_status_checked_at" => Time.now.to_i)
+
+        expect(instance.clowk_session_active?).to be(false)
+        expect(tokens).not_to have_received(:verify_with_session)
+      end
+
+      # The whole reason for 0.7. An app can now cache the ordinary check and
+      # still demand a live answer where a stale "active" would be a hole.
+      it "ignores the cache when forced, and asks Clowk" do
+        broker({status: "revoked", session_id: "clk_session_abc"})
+
+        instance = signed_in("session_status" => {"status" => "active"},
+          "session_status_checked_at" => Time.now.to_i)
+
+        expect(instance.clowk_session_active?).to be(true)
+        expect(instance.clowk_session_active?(force: true)).to be(false)
+        expect(tokens).to have_received(:verify_with_session).once
+      end
+
+      it "ends the session when the forced check comes back inactive" do
+        broker({status: "revoked", session_id: "clk_session_abc"})
+
+        instance = signed_in("session_status" => {"status" => "active"},
+          "session_status_checked_at" => Time.now.to_i)
+
+        instance.clowk_enforce_session!
+
+        expect(instance.redirect_target).to be_nil
+
+        instance.clowk_enforce_fresh_session!
+
+        expect(instance.redirect_target).to eq("/clowk/sign_in?return_to=%2Fdashboard")
+      end
+    end
+
+    describe "failing open when the broker cannot be reached" do
+      before { Clowk.configure { |config| config.session_status_ttl = 300 } }
+
+      def unreachable
+        sdk_client = double("Clowk::SDK::Client")
+
+        allow(Clowk::SDK::Client).to receive(:new).and_return(sdk_client)
+        allow(sdk_client).to receive(:tokens).and_return(tokens)
+        allow(tokens).to receive(:verify_with_session).and_raise(Errno::ECONNREFUSED)
+      end
+
+      it "leaves the session standing rather than signing everyone out" do
+        unreachable
+
+        instance = signed_in
+
+        expect(instance.clowk_session_active?).to be(true)
+
+        instance.clowk_enforce_session!
+
+        expect(instance.redirect_target).to be_nil
+      end
+
+      it "can be switched off, for an app that would rather fail closed" do
+        Clowk.configure { |config| config.fail_open_on_broker_error = false }
+        unreachable
+
+        expect(signed_in.clowk_session_active?).to be(false)
+      end
+
+      # A bug must not read as "the session is probably fine".
+      it "does not swallow anything but a network failure" do
+        sdk_client = double("Clowk::SDK::Client")
+
+        allow(Clowk::SDK::Client).to receive(:new).and_return(sdk_client)
+        allow(sdk_client).to receive(:tokens).and_return(tokens)
+        allow(tokens).to receive(:verify_with_session).and_raise(NoMethodError, "undefined method")
+
+        expect { signed_in.clowk_session_active? }.to raise_error(NoMethodError)
+      end
+    end
+
+    describe "max_session_age" do
+      before { Clowk.configure { |config| config.session_status_ttl = 300 } }
+
+      it "ends a session past the ceiling without asking Clowk" do
+        broker({status: "active", session_id: "clk_session_abc"})
+        Clowk.configure { |config| config.max_session_age = 3600 }
+
+        instance = signed_in("signed_in_at" => Time.now.to_i - 7200)
+
+        instance.clowk_enforce_session!
+
+        expect(instance.redirect_target).to eq("/clowk/sign_in?return_to=%2Fdashboard")
+        expect(tokens).not_to have_received(:verify_with_session)
+      end
+
+      it "leaves a session inside the ceiling alone" do
+        broker({status: "active", session_id: "clk_session_abc"})
+        Clowk.configure { |config| config.max_session_age = 3600 }
+
+        instance = signed_in("signed_in_at" => Time.now.to_i - 60)
+
+        instance.clowk_enforce_session!
+
+        expect(instance.redirect_target).to be_nil
+      end
+
+      # The other half of failing open: without a ceiling, an unreachable Clowk
+      # would keep a session alive forever.
+      it "ends a stale session even while the broker is unreachable" do
+        sdk_client = double("Clowk::SDK::Client")
+
+        allow(Clowk::SDK::Client).to receive(:new).and_return(sdk_client)
+        allow(sdk_client).to receive(:tokens).and_return(tokens)
+        allow(tokens).to receive(:verify_with_session).and_raise(Errno::ECONNREFUSED)
+
+        Clowk.configure { |config| config.max_session_age = 3600 }
+
+        instance = signed_in("signed_in_at" => Time.now.to_i - 7200)
+
+        instance.clowk_enforce_session!
+
+        expect(instance.redirect_target).to eq("/clowk/sign_in?return_to=%2Fdashboard")
+      end
+
+      it "is off by default, leaving Clowk as the only authority" do
+        expect(Clowk::Configuration.new.max_session_age).to be_nil
+      end
+    end
+
+    it "routes every expiry through on_session_expired when one is set" do
+      broker({status: "revoked", session_id: "clk_session_abc"})
+      seen = []
+
+      Clowk.configure do |config|
+        config.max_session_age = 3600
+        config.on_session_expired = ->(_controller, info) { seen << info }
+      end
+
+      signed_in("signed_in_at" => Time.now.to_i - 7200).clowk_enforce_session!
+      signed_in.clowk_enforce_fresh_session!
+
+      expect(seen.size).to eq(2)
+    end
+  end
 end

@@ -227,6 +227,48 @@ What changes in that mode:
   session, keyed by a digest of the token. Without it, `enforce_active_session`
   would cost a round trip to Clowk on every authenticated request.
 
+### Keeping a session honest
+
+A valid token proves who signed in, not that the session still stands —
+revocation lives server-side. `config.enforce_active_session = true` checks it,
+and `config.session_status_ttl` decides how often that costs a round trip.
+
+Some actions cannot take a cached answer. Rotating a secret, deleting an
+account, removing a member: a status from fourteen minutes ago is a hole. Name
+those actions and they get a live one:
+
+```ruby
+class ApiKeysController < ApplicationController
+  clowk_require_fresh_session only: [:create, :update, :destroy]
+end
+```
+
+It takes the same options as `before_action`. Everything not named keeps the
+cached check, so an app pays for the round trip on the few actions it cannot
+undo and nowhere else. `clowk_enforce_fresh_session!` is the same thing as a
+method, and `clowk_session_active?(force: true)` returns the answer instead of
+enforcing it.
+
+Two settings decide what happens when Clowk itself cannot be reached:
+
+```ruby
+config.fail_open_on_broker_error = true   # default
+config.max_session_age = 12.hours         # default nil
+```
+
+Failing open leaves the session standing and checks again on the next request —
+a blip on the way to a single droplet must not sign everyone out. Only network
+failures count; anything else still raises, because a bug must not read as "the
+session is probably fine".
+
+`max_session_age` is the other half of that, and failing open is not safe
+without it: a local ceiling the broker plays no part in, so a permanently
+unreachable Clowk cannot keep a session alive forever. Past it the session ends
+with no round trip at all.
+
+Both ends — the broker said inactive, the ceiling passed — go through
+`config.on_session_expired` when you set one.
+
 ### Token verification
 
 Tokens signed with `RS256` are verified against Clowk's public key set, fetched

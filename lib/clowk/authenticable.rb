@@ -7,6 +7,11 @@ module Clowk
   module Authenticable
     extend ActiveSupport::Concern
 
+    # What a liveness check can raise once Clowk::Http's retries are spent, plus
+    # connection-refused, which retries never cover. Anything else is a bug and
+    # must not be swallowed into "the session is probably fine".
+    BROKER_UNAVAILABLE = [SystemCallError, Timeout::Error, IOError, SocketError, EOFError].freeze
+
     def self.install_dynamic_methods(base)
       scope = Clowk.config.prefix_by.to_s
       current_method = :"current_#{scope}"
@@ -14,6 +19,7 @@ module Clowk
       signed_in_method = :"#{scope}_signed_in?"
 
       enforce_session_method = :"#{scope}_enforce_session!"
+      enforce_fresh_method = :"#{scope}_enforce_fresh_session!"
       sign_out_method = :"#{scope}_sign_out!"
 
       base.class_eval do
@@ -41,6 +47,12 @@ module Clowk
           end
         end
 
+        unless enforce_fresh_method == :clowk_enforce_fresh_session!
+          define_method(enforce_fresh_method) do
+            clowk_enforce_fresh_session!
+          end
+        end
+
         unless sign_out_method == :clowk_sign_out!
           define_method(sign_out_method) do
             clowk_sign_out!
@@ -53,6 +65,22 @@ module Clowk
 
     included do
       Clowk::Authenticable.install_dynamic_methods(self)
+    end
+
+    class_methods do
+      # Demand a live answer from Clowk before these actions, whatever a cached
+      # status says.
+      #
+      #   class ApiKeysController < ApplicationController
+      #     clowk_require_fresh_session only: [:create, :update, :destroy]
+      #   end
+      #
+      # Takes the same options as before_action. Everything NOT listed keeps the
+      # cached check, which is the point: an app pays for a round trip on the few
+      # actions that cannot be undone, and nowhere else.
+      def clowk_require_fresh_session(**options)
+        before_action(**options) { clowk_enforce_fresh_session! }
+      end
     end
 
     # Per-request credentials — for apps whose keys are not a boot constant:
@@ -90,27 +118,45 @@ module Clowk
       clowk_current_resource.present?
     end
 
-    def clowk_session_status
-      @clowk_session_status ||= resolve_session_status
+    # @param force [Boolean] ignore any cached status and ask Clowk now
+    def clowk_session_status(force: false)
+      return @clowk_session_status if defined?(@clowk_session_status) && !force
+
+      @clowk_session_status = resolve_session_status(force: force)
     end
 
-    def clowk_session_active?
-      clowk_session_status&.dig(:status) == "active"
+    # @param force [Boolean] see {#clowk_session_status}
+    def clowk_session_active?(force: false)
+      status = clowk_session_status(force: force)
+
+      # "Could not ask" rather than "not active": a blip on the way to a single
+      # droplet must not sign everyone out. max_session_age is the bound on how
+      # long that can carry a session Clowk would have refused.
+      return true if @clowk_session_check_unavailable && Clowk.config.fail_open_on_broker_error
+
+      status&.dig(:status) == "active"
     end
 
-    def clowk_enforce_session!
-      return if clowk_session_active?
+    # Ends the session unless Clowk says, right now, that it still stands.
+    #
+    # For the handful of actions where a cached "active" is not good enough:
+    # rotating a secret, deleting an account, removing a member. Everything else
+    # should take the cached check — this is a round trip, on purpose.
+    #
+    #   clowk_require_fresh_session only: [:destroy, :rotate_secret]
+    #
+    # Before 0.7 the only way to get this was `session_status_ttl = 0`, which
+    # bought freshness here by paying a round trip on every page instead.
+    def clowk_enforce_fresh_session!
+      clowk_enforce_session!(force: true)
+    end
 
-      session_info = clowk_session_status
-      callback = Clowk.config.on_session_expired
+    # @param force [Boolean] see {#clowk_session_status}
+    def clowk_enforce_session!(force: false)
+      return clowk_expire_session!(nil) if clowk_session_beyond_max_age?
+      return if clowk_session_active?(force: force)
 
-      if callback.respond_to?(:call)
-        callback.call(self, session_info)
-
-        return
-      end
-
-      clowk_handle_expired_session(session_info)
+      clowk_expire_session!(clowk_session_status)
     end
 
     def clowk_authenticate!
@@ -156,6 +202,37 @@ module Clowk
       else
         redirect_to clowk_sign_in_path(return_to: request.fullpath)
       end
+    end
+
+    # One route out of a session that must end, whatever ended it — the broker
+    # said inactive, or the local ceiling passed. Apps hook it with
+    # config.on_session_expired; the default answers 401 or redirects.
+    def clowk_expire_session!(session_info)
+      callback = Clowk.config.on_session_expired
+
+      if callback.respond_to?(:call)
+        callback.call(self, session_info)
+
+        return
+      end
+
+      clowk_handle_expired_session(session_info)
+    end
+
+    # A ceiling Clowk plays no part in. Without it, failing open on an
+    # unreachable broker would mean a session that never ends.
+    #
+    # signed_in_at is stamped once, when the session is established:
+    # clowk_current_resource prefers the stored payload, so persist_clowk_session
+    # does not run again while the session stands.
+    def clowk_session_beyond_max_age?
+      max = Clowk.config.max_session_age.to_i
+
+      return false unless max.positive?
+
+      started = (stored_session&.dig("signed_in_at") || stored_session&.dig(:signed_in_at)).to_i
+
+      started.positive? && (Time.now.to_i - started) > max
     end
 
     def clowk_handle_expired_session(_session_info)
@@ -253,8 +330,9 @@ module Clowk
       })
     end
 
-    def resolve_session_status
-      cached = clowk_read_cached_session_status
+    def resolve_session_status(force: false)
+      @clowk_session_check_unavailable = false
+      cached = force ? nil : clowk_read_cached_session_status
 
       return cached if cached
 
@@ -273,6 +351,14 @@ module Clowk
 
       status
     rescue Clowk::InvalidTokenError
+      nil
+    rescue *BROKER_UNAVAILABLE => e
+      # Never cached: "we could not ask" is not an answer worth keeping, and the
+      # next request should try again rather than inherit this one's bad luck.
+      @clowk_session_check_unavailable = true
+
+      Clowk.config.http_logger&.warn("[Clowk] session check unavailable: #{e.class}: #{e.message}")
+
       nil
     end
 
