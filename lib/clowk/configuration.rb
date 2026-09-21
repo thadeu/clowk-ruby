@@ -66,7 +66,12 @@ module Clowk
       # the next request; max_session_age is what bounds that.
       @fail_open_on_broker_error = true
 
-      # Where the token is kept for the next request: :session or :cookie.
+      # Whose cookie keeps the token for the next request: :app or :clowk.
+      #
+      # Both are cookies — that is why the setting names the OWNER rather than
+      # the mechanism. :clowk is this gem's own cookie; :app is the Rails
+      # session, which is itself one cookie carrying everything the app puts in
+      # `session[...]`.
       #
       # Clowk's own cookie is written either way — it is what `current_token`
       # reads when the session has none, and the only place an API-only app has
@@ -83,7 +88,7 @@ module Clowk
       #
       # :session stays the default so an upgrade changes nothing until an app
       # asks for :cookie.
-      @token_store = :session
+      @token_store = :app
     end
 
     # Where API-only apps cache session status, since they have no Rails session

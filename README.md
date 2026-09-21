@@ -277,9 +277,11 @@ Both ends — the broker said inactive, the ceiling passed — go through
 Clowk writes the token to its own cookie, and — by default, as every version
 before 0.9 did — mirrors a copy into the app's Rails session.
 
+Both are cookies, so the setting names the owner rather than the mechanism:
+
 ```ruby
-config.token_store = :cookie   # Clowk's cookie only
-config.token_store = :session  # also mirrored into the session (the default)
+config.token_store = :clowk  # Clowk's own cookie, and nowhere else
+config.token_store = :app    # also mirrored into the Rails session (the default)
 ```
 
 The copy is not free. A Rails session lives in **one** cookie with about 4096
@@ -290,12 +292,12 @@ previous cookie simply stays. Everything written on that request goes with it: a
 flash message, a selected tenant, a CSRF rotation. What a person sees is a button
 that does nothing.
 
-Under `:cookie` the session keeps the claims and the sign-in time, nothing else.
+Under `:clowk` the session keeps the claims and the sign-in time, nothing else.
 `current_token` reads Clowk's cookie instead, which is where an API-only app has
 always read it from. Sessions written before the switch are pruned on their next
 request, so an app does not have to wait for everyone to sign out.
 
-The default stays `:session` so an upgrade changes nothing until you ask.
+The default stays `:app` so an upgrade changes nothing until you ask.
 
 ### Token verification
 

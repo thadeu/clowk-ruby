@@ -9,8 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **`config.token_store`** — `:session` (the default, and what every version before this did) or
-  `:cookie`. Clowk's own cookie is written either way; the setting decides whether a copy is also
+- **`config.token_store`** — `:app` (the default, and what every version before this did) or `:clowk`. Clowk's own cookie is written either way; the setting decides whether a copy is also
   mirrored into the app's Rails session.
 
   The copy is not free. A Rails session lives in one cookie with about 4096 bytes to its name, and
@@ -20,20 +19,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   request goes with it: a flash message, a selected tenant, a CSRF rotation. What a person sees is a
   button that does nothing, and what the log shows is a request that succeeded.
 
-  Under `:cookie` the session keeps the claims and the sign-in time and nothing else, which is
+  Under `:clowk` the session keeps the claims and the sign-in time and nothing else, which is
   roughly a third of what it held. `current_token` reads Clowk's cookie instead — the path an
   API-only app has always taken. Sessions written before the switch are pruned on their next
   request, so an app does not have to wait for everyone to sign out and back in.
 
 ### Upgrading
 
-Nothing changes. `:session` is the default, so an app behaves exactly as it did until it asks for
-`:cookie`.
+Nothing changes. `:app` is the default, so an app behaves exactly as it did until it asks for
+`:clowk`.
 
 An app whose session cookie is anywhere near 4096 bytes should ask:
 
 ```ruby
-Clowk.configure { |config| config.token_store = :cookie }
+Clowk.configure { |config| config.token_store = :clowk }
 ```
 
 ## [0.8.0] - 2026-09-21

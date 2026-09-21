@@ -504,8 +504,8 @@ RSpec.describe Clowk::Authenticable do
     # The whole point. A Rails session lives in one 4096-byte cookie, and an
     # RS256 token is most of what one weighs — enough that a flash message on
     # top is what tips a browser into discarding the cookie whole.
-    it "keeps the token out of the session under :cookie" do
-      Clowk.configure { |config| config.token_store = :cookie }
+    it "keeps the token out of the session under :clowk" do
+      Clowk.configure { |config| config.token_store = :clowk }
 
       instance = signed_in_with_cookie
 
@@ -515,7 +515,7 @@ RSpec.describe Clowk::Authenticable do
     end
 
     it "still finds the token, from Clowk's own cookie" do
-      Clowk.configure { |config| config.token_store = :cookie }
+      Clowk.configure { |config| config.token_store = :clowk }
 
       instance = signed_in_with_cookie
 
@@ -525,7 +525,7 @@ RSpec.describe Clowk::Authenticable do
     end
 
     it "still knows who is signed in, from the claims the session keeps" do
-      Clowk.configure { |config| config.token_store = :cookie }
+      Clowk.configure { |config| config.token_store = :clowk }
 
       instance = signed_in_with_cookie
 
@@ -536,8 +536,8 @@ RSpec.describe Clowk::Authenticable do
     # Sessions written before the switch keep the copy, and persist_clowk_session
     # does not run again while one stands — so without the prune an app would
     # shrink nothing until every person signed out.
-    it "drops a copy left by a session written under :session" do
-      Clowk.configure { |config| config.token_store = :cookie }
+    it "drops a copy left by a session written under :app" do
+      Clowk.configure { |config| config.token_store = :clowk }
 
       instance = dummy_class.new(
         session_data: {"token" => valid_token, "user" => payload, "signed_in_at" => Time.now.to_i},
@@ -550,7 +550,7 @@ RSpec.describe Clowk::Authenticable do
       expect(session_blob(instance)["user"]).to eq(payload)
     end
 
-    it "leaves that copy alone under :session" do
+    it "leaves that copy alone under :app" do
       instance = dummy_class.new(
         session_data: {"token" => valid_token, "user" => payload},
         request: cookie_request
@@ -561,8 +561,8 @@ RSpec.describe Clowk::Authenticable do
       expect(session_blob(instance)["token"]).to eq(valid_token)
     end
 
-    it "defaults to :session" do
-      expect(Clowk::Configuration.new.token_store).to eq(:session)
+    it "defaults to :app" do
+      expect(Clowk::Configuration.new.token_store).to eq(:app)
     end
   end
 
