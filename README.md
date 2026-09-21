@@ -272,6 +272,31 @@ with no round trip at all.
 Both ends — the broker said inactive, the ceiling passed — go through
 `config.on_session_expired` when you set one.
 
+### Where the token is kept
+
+Clowk writes the token to its own cookie, and — by default, as every version
+before 0.9 did — mirrors a copy into the app's Rails session.
+
+```ruby
+config.token_store = :cookie   # Clowk's cookie only
+config.token_store = :session  # also mirrored into the session (the default)
+```
+
+The copy is not free. A Rails session lives in **one** cookie with about 4096
+bytes to its name, and in production, where tokens are RS256, the token is most
+of what a session weighs. Hand a browser more than it will hold and it discards
+the whole cookie in silence — no error server-side, none in the console, the
+previous cookie simply stays. Everything written on that request goes with it: a
+flash message, a selected tenant, a CSRF rotation. What a person sees is a button
+that does nothing.
+
+Under `:cookie` the session keeps the claims and the sign-in time, nothing else.
+`current_token` reads Clowk's cookie instead, which is where an API-only app has
+always read it from. Sessions written before the switch are pruned on their next
+request, so an app does not have to wait for everyone to sign out.
+
+The default stays `:session` so an upgrade changes nothing until you ask.
+
 ### Token verification
 
 Tokens signed with `RS256` are verified against Clowk's public key set, fetched

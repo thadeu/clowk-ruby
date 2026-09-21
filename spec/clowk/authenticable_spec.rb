@@ -464,6 +464,108 @@ RSpec.describe Clowk::Authenticable do
     expect(scoped_class).not_to respond_to(:clowk_require_fresh_session)
   end
 
+  describe "token_store (0.9)" do
+    before { Clowk.configure { |config| config.secret_key = "sk_test" } }
+
+    let(:valid_token) do
+      JWT.encode(
+        payload.merge(iss: Clowk.config.issuer, exp: 1.hour.from_now.to_i),
+        Clowk.config.secret_key,
+        Clowk::JwtVerifier::ALGORITHM
+      )
+    end
+
+    # The token comes off the REQUEST, the way it does in production: Clowk's
+    # own cookie, read through the request's jar.
+    let(:cookie_request) do
+      instance_double(
+        "Request", format: request_format, fullpath: "/dashboard",
+        params: {}, authorization: nil, ssl?: true,
+        cookie_jar: {Clowk.config.cookie_key => valid_token}
+      )
+    end
+
+    def signed_in_with_cookie
+      dummy_class.new(request: cookie_request)
+    end
+
+    def session_blob(instance)
+      instance.session[Clowk.config.session_key]
+    end
+
+    it "mirrors the token into the session by default, as before 0.9" do
+      instance = signed_in_with_cookie
+
+      instance.send(:persist_clowk_session, valid_token, {"sub" => "user_123"})
+
+      expect(session_blob(instance).keys).to include(:token, :user, :signed_in_at)
+    end
+
+    # The whole point. A Rails session lives in one 4096-byte cookie, and an
+    # RS256 token is most of what one weighs — enough that a flash message on
+    # top is what tips a browser into discarding the cookie whole.
+    it "keeps the token out of the session under :cookie" do
+      Clowk.configure { |config| config.token_store = :cookie }
+
+      instance = signed_in_with_cookie
+
+      instance.send(:persist_clowk_session, valid_token, {"sub" => "user_123"})
+
+      expect(session_blob(instance).keys).to contain_exactly(:user, :signed_in_at)
+    end
+
+    it "still finds the token, from Clowk's own cookie" do
+      Clowk.configure { |config| config.token_store = :cookie }
+
+      instance = signed_in_with_cookie
+
+      instance.send(:persist_clowk_session, valid_token, {"sub" => "user_123"})
+
+      expect(instance.current_token).to eq(valid_token)
+    end
+
+    it "still knows who is signed in, from the claims the session keeps" do
+      Clowk.configure { |config| config.token_store = :cookie }
+
+      instance = signed_in_with_cookie
+
+      expect(instance.clowk_signed_in?).to be(true)
+      expect(instance.current_clowk.email).to eq("user@example.com")
+    end
+
+    # Sessions written before the switch keep the copy, and persist_clowk_session
+    # does not run again while one stands — so without the prune an app would
+    # shrink nothing until every person signed out.
+    it "drops a copy left by a session written under :session" do
+      Clowk.configure { |config| config.token_store = :cookie }
+
+      instance = dummy_class.new(
+        session_data: {"token" => valid_token, "user" => payload, "signed_in_at" => Time.now.to_i},
+        request: cookie_request
+      )
+
+      instance.clowk_signed_in?
+
+      expect(session_blob(instance).keys).not_to include("token")
+      expect(session_blob(instance)["user"]).to eq(payload)
+    end
+
+    it "leaves that copy alone under :session" do
+      instance = dummy_class.new(
+        session_data: {"token" => valid_token, "user" => payload},
+        request: cookie_request
+      )
+
+      instance.clowk_signed_in?
+
+      expect(session_blob(instance)["token"]).to eq(valid_token)
+    end
+
+    it "defaults to :session" do
+      expect(Clowk::Configuration.new.token_store).to eq(:session)
+    end
+  end
+
   describe "freshness (0.7)" do
     let(:tokens) { instance_double(Clowk::SDK::Token) }
 

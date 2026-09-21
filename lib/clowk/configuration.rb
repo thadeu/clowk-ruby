@@ -27,6 +27,7 @@ module Clowk
     attr_accessor :session_status_ttl
     attr_accessor :max_session_age
     attr_accessor :fail_open_on_broker_error
+    attr_accessor :token_store
     attr_writer :session_status_cache
 
     def initialize
@@ -64,6 +65,25 @@ module Clowk
       # cannot be made at all, the session is left standing and checked again on
       # the next request; max_session_age is what bounds that.
       @fail_open_on_broker_error = true
+
+      # Where the token is kept for the next request: :session or :cookie.
+      #
+      # Clowk's own cookie is written either way — it is what `current_token`
+      # reads when the session has none, and the only place an API-only app has
+      # ever had. The setting decides whether a COPY is also mirrored into the
+      # app's Rails session, as every version before 0.9 did.
+      #
+      # That copy is not free. A Rails session lives in ONE cookie with about
+      # 4096 bytes to its name, and in production, where tokens are RS256, the
+      # token is most of what a session weighs. Hand a browser more than it will
+      # hold and it discards the whole cookie in silence: no error server-side,
+      # none in the console, the previous cookie simply stays. Everything written
+      # on that request goes with it — a flash message, a selected tenant — which
+      # reads as a button that does nothing.
+      #
+      # :session stays the default so an upgrade changes nothing until an app
+      # asks for :cookie.
+      @token_store = :session
     end
 
     # Where API-only apps cache session status, since they have no Rails session
