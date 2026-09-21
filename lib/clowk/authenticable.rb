@@ -153,6 +153,14 @@ module Clowk
 
     # @param force [Boolean] see {#clowk_session_status}
     def clowk_enforce_session!(force: false)
+      # Nothing to enforce against a request that carries no session. Reached
+      # through clowk_authenticate! this is already true, but the method is also
+      # a before_action in its own right — and called that way with no session it
+      # read "not active" and ended one that never existed. On a page that skips
+      # the identity gate on purpose (an invite link, a public page that shows
+      # more when signed in) that threw away whatever the redirect was carrying.
+      return unless clowk_signed_in?
+
       return clowk_expire_session!(nil) if clowk_session_beyond_max_age?
       return if clowk_session_active?(force: force)
 

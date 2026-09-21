@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-09-21
+
+### Fixed
+
+- **`clowk_enforce_session!` no longer expires a session that never existed.** Reached through
+  `clowk_authenticate!` it is always preceded by a signed-in check, but it is also usable as a
+  `before_action` on its own — which is how an app runs the freshness check on its own terms. Called
+  that way with no session it read "not active" and took the expiry route, signing out nobody and
+  redirecting.
+
+  On a page that skips the identity gate deliberately — an invite link, a public page that shows
+  more once you are signed in — that replaced a redirect carrying `return_to` with a bare one, so
+  the visitor signed in and landed somewhere other than the link they followed.
+
+  It now returns early when nobody is signed in. There is nothing to enforce against an anonymous
+  request, and `clowk_authenticate!` still refuses it as before.
+
 ## [0.7.0] - 2026-09-21
 
 ### Added

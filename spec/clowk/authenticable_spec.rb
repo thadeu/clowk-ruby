@@ -593,6 +593,57 @@ RSpec.describe Clowk::Authenticable do
       end
     end
 
+    describe "with no session at all" do
+      before do
+        Clowk.configure do |config|
+          config.session_status_ttl = 300
+          config.max_session_age = 3600
+        end
+      end
+
+      def anonymous
+        dummy_class.new(request: request)
+      end
+
+      # Reached as a before_action rather than through clowk_authenticate!, this
+      # used to read "not active" and expire a session that never existed —
+      # which on a page that skips the identity gate on purpose threw away the
+      # return_to the redirect was carrying.
+      it "does nothing rather than expiring a session that never existed" do
+        instance = anonymous
+
+        instance.clowk_enforce_session!
+
+        expect(instance.redirect_target).to be_nil
+      end
+
+      it "does nothing when forced either" do
+        instance = anonymous
+
+        instance.clowk_enforce_fresh_session!
+
+        expect(instance.redirect_target).to be_nil
+      end
+
+      it "never reaches the callback" do
+        seen = []
+
+        Clowk.configure { |config| config.on_session_expired = ->(_c, info) { seen << info } }
+
+        anonymous.clowk_enforce_session!
+
+        expect(seen).to be_empty
+      end
+
+      it "still refuses the request when clowk_authenticate! is what asks" do
+        instance = anonymous
+
+        instance.clowk_authenticate!
+
+        expect(instance.redirect_target).to eq("/clowk/sign_in?return_to=%2Fdashboard")
+      end
+    end
+
     it "routes every expiry through on_session_expired when one is set" do
       broker({status: "revoked", session_id: "clk_session_abc"})
       seen = []
