@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-09-21
+
+### Changed
+
+- **`clowk_require_fresh_session` is gone; use `before_action :clowk_enforce_fresh_session!`.**
+  The class macro was the odd one out — everything else the concern gives a controller is an
+  instance method, named for `prefix_by` and used as an ordinary filter. One shape is easier to
+  remember than two, and a plain `before_action` carries every filter option without the macro
+  having to pass them through.
+
+  ```ruby
+  # before
+  clowk_require_fresh_session only: [:create, :destroy]
+
+  # after
+  before_action :clowk_enforce_fresh_session!, only: [:create, :destroy]
+
+  # or, under prefix_by = :clowk_user
+  before_action :clowk_user_enforce_fresh_session!, only: [:create, :destroy]
+  ```
+
+  The method itself is unchanged, and has carried the scoped name since 0.7.0 — only the macro
+  around it is removed.
+
 ## [0.7.1] - 2026-09-21
 
 ### Fixed

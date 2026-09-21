@@ -67,22 +67,6 @@ module Clowk
       Clowk::Authenticable.install_dynamic_methods(self)
     end
 
-    class_methods do
-      # Demand a live answer from Clowk before these actions, whatever a cached
-      # status says.
-      #
-      #   class ApiKeysController < ApplicationController
-      #     clowk_require_fresh_session only: [:create, :update, :destroy]
-      #   end
-      #
-      # Takes the same options as before_action. Everything NOT listed keeps the
-      # cached check, which is the point: an app pays for a round trip on the few
-      # actions that cannot be undone, and nowhere else.
-      def clowk_require_fresh_session(**options)
-        before_action(**options) { clowk_enforce_fresh_session! }
-      end
-    end
-
     # Per-request credentials — for apps whose keys are not a boot constant:
     # an operator pastes a publishable key into a settings screen, or one
     # process serves several tenants.
@@ -143,7 +127,10 @@ module Clowk
     # rotating a secret, deleting an account, removing a member. Everything else
     # should take the cached check — this is a round trip, on purpose.
     #
-    #   clowk_require_fresh_session only: [:destroy, :rotate_secret]
+    #   before_action :clowk_enforce_fresh_session!, only: [:destroy]
+    #
+    # Under a configured prefix_by it is named for the scope, like every other
+    # method here: `clowk_user_enforce_fresh_session!`.
     #
     # Before 0.7 the only way to get this was `session_status_ttl = 0`, which
     # bought freshness here by paying a round trip on every page instead.

@@ -440,6 +440,30 @@ RSpec.describe Clowk::Authenticable do
       end
     end
   end
+  it "names the fresh-session check for the configured prefix, like every other method" do
+    Clowk.configure { |config| config.prefix_by = :clowk_user }
+
+    scoped_class = Class.new do
+      include Clowk::Helpers::UrlHelpers
+      include Clowk::Authenticable
+
+      attr_reader :session, :cookies
+
+      def initialize(request:)
+        @session = {}
+        @cookies = {}
+        @request = request
+      end
+
+      attr_reader :request
+    end
+
+    instance = scoped_class.new(request: request)
+
+    expect(instance).to respond_to(:clowk_user_enforce_fresh_session!, :clowk_user_enforce_session!)
+    expect(scoped_class).not_to respond_to(:clowk_require_fresh_session)
+  end
+
   describe "freshness (0.7)" do
     let(:tokens) { instance_double(Clowk::SDK::Token) }
 

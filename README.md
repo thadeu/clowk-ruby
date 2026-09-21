@@ -239,15 +239,18 @@ those actions and they get a live one:
 
 ```ruby
 class ApiKeysController < ApplicationController
-  clowk_require_fresh_session only: [:create, :update, :destroy]
+  before_action :clowk_enforce_fresh_session!, only: [:create, :update, :destroy]
 end
 ```
 
-It takes the same options as `before_action`. Everything not named keeps the
-cached check, so an app pays for the round trip on the few actions it cannot
-undo and nowhere else. `clowk_enforce_fresh_session!` is the same thing as a
-method, and `clowk_session_active?(force: true)` returns the answer instead of
-enforcing it.
+An ordinary `before_action`, so the filter options you already know all work.
+Everything not named keeps the cached check, so an app pays for the round trip on
+the few actions it cannot undo and nowhere else.
+
+Under a configured `prefix_by` the method is named for the scope, like every
+other one here — `clowk_user_enforce_fresh_session!` beside
+`clowk_user_enforce_session!`. And `clowk_session_active?(force: true)` returns
+the answer instead of enforcing it.
 
 Two settings decide what happens when Clowk itself cannot be reached:
 
