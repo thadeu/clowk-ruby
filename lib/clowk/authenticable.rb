@@ -291,7 +291,22 @@ module Clowk
       store.read(clowk_status_cache_key)&.deep_symbolize_keys
     end
 
+    # A TTL of zero means "never trust a cached status", so there is nothing to
+    # write anywhere — the read side already discards whatever is there
+    # (clowk_session_status_fresh? is false without a positive TTL).
+    #
+    # The guard used to sit below the session branch and cover only the external
+    # cache, so an app that set the TTL to zero — to guarantee a genuinely fresh
+    # check before a destructive action — still had the full status payload
+    # written into its session on every single request, and never read back.
+    # That is write-only weight in a cookie with 4096 bytes to live in, and it
+    # ends as ActionDispatch::Cookies::CookieOverflow on whichever request
+    # happens to add a flash message.
     def clowk_write_cached_session_status(status)
+      ttl = Clowk.config.session_status_ttl.to_i
+
+      return unless ttl.positive?
+
       if clowk_session_store
         clowk_session_store[Clowk.config.session_key] = stored_session.merge(
           "session_status" => status,
@@ -301,10 +316,9 @@ module Clowk
         return
       end
 
-      ttl = Clowk.config.session_status_ttl.to_i
       store = clowk_status_cache
 
-      return unless store && ttl.positive?
+      return unless store
 
       store.write(clowk_status_cache_key, status, expires_in: ttl)
     end

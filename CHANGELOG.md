@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-09-21
+
+### Fixed
+
+- **A `session_status_ttl` of zero no longer writes to the session.** The guard that skips caching
+  sat below the session branch and covered only the external cache, so an app that set the TTL to
+  zero — the one way to guarantee a genuinely fresh check before a destructive action, since there
+  is no way to bypass the cache for a single call — still had the full status payload merged into
+  its Rails session on every request, and never read back: `clowk_session_status_fresh?` returns
+  false without a positive TTL, so the write was never once used.
+
+  In a cookie session that is write-only weight in 4096 bytes, growing with the status payload
+  until some ordinary request adds a flash message and Rails raises
+  `ActionDispatch::Cookies::CookieOverflow` — on the redirect, after the action already succeeded,
+  which makes it read as a bug in whatever that action was. Zero now means "cache nowhere", the
+  same in both branches.
+
+  Apps on a positive TTL are unaffected.
+
 ## [0.6.0] - 2026-09-01
 
 ### Added

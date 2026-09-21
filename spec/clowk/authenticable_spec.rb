@@ -190,6 +190,52 @@ RSpec.describe Clowk::Authenticable do
 
       expect(instance.clowk_session_status).to be_nil
     end
+
+    describe "writing a status back" do
+      let(:status) { {"status" => "active", "session_id" => "clk_session_abc"} }
+
+      def write!(instance)
+        instance.send(:clowk_write_cached_session_status, status)
+      end
+
+      it "stores it in the session when a TTL allows caching" do
+        Clowk.configure { |config| config.session_status_ttl = 300 }
+
+        instance = dummy_class.new(session_data: {user: payload}, request: request)
+
+        write!(instance)
+
+        stored = instance.session[Clowk.config.session_key]
+
+        expect(stored["session_status"]).to eq(status)
+        expect(stored["session_status_checked_at"]).to be_within(2).of(Time.now.to_i)
+      end
+
+      # The bug behind a CookieOverflow. A TTL of zero says "never trust a
+      # cached status", and the read side honours it — but the session branch
+      # wrote one anyway, on every request, never read back, until the cookie
+      # passed 4096 bytes and Rails refused the response.
+      it "writes nothing to the session when the TTL is zero" do
+        Clowk.configure { |config| config.session_status_ttl = 0 }
+
+        instance = dummy_class.new(session_data: {user: payload}, request: request)
+        before = instance.session[Clowk.config.session_key].dup
+
+        write!(instance)
+
+        expect(instance.session[Clowk.config.session_key]).to eq(before)
+      end
+
+      it "keeps the session small enough to survive a flash message" do
+        Clowk.configure { |config| config.session_status_ttl = 0 }
+
+        instance = dummy_class.new(session_data: {user: payload}, request: request)
+
+        10.times { write!(instance) }
+
+        expect(instance.session.to_s.bytesize).to be < 500
+      end
+    end
   end
 
   it "generates a sign-out helper matching the configured prefix_by" do
