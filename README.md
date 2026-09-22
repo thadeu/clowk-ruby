@@ -274,30 +274,30 @@ Both ends — the broker said inactive, the ceiling passed — go through
 
 ### Where the token is kept
 
-Clowk writes the token to its own cookie, and — by default, as every version
-before 0.9 did — mirrors a copy into the app's Rails session.
-
-Both are cookies, so the setting names the owner rather than the mechanism:
+Clowk writes the token to its own cookie. The setting decides one thing: whether
+a copy is **also** mirrored into the host app's Rails session.
 
 ```ruby
-config.token_store = :clowk  # Clowk's own cookie, and nowhere else
-config.token_store = :app    # also mirrored into the Rails session (the default)
+config.token_store = nil   # Clowk's own cookie, and nowhere else (the default)
+config.token_store = :app  # also mirrored into the app's Rails session
 ```
 
-The copy is not free. A Rails session lives in **one** cookie with about 4096
-bytes to its name, and in production, where tokens are RS256, the token is most
-of what a session weighs. Hand a browser more than it will hold and it discards
-the whole cookie in silence — no error server-side, none in the console, the
-previous cookie simply stays. Everything written on that request goes with it: a
-flash message, a selected tenant, a CSRF rotation. What a person sees is a button
-that does nothing.
+The copy is not free, which is why `nil` is the default. A Rails session lives in
+**one** cookie with about 4096 bytes to its name, and in production, where tokens
+are RS256, the token is most of what a session weighs. Hand a browser more than
+it will hold and it discards the whole cookie in silence — no error server-side,
+none in the console, the previous cookie simply stays. Everything written on that
+request goes with it: a flash message, a selected tenant, a CSRF rotation. What a
+person sees is a button that does nothing. An app pays that risk on every request
+to keep a copy of a token it already has.
 
-Under `:clowk` the session keeps the claims and the sign-in time, nothing else.
+Under `nil` the session keeps the claims and the sign-in time, nothing else.
 `current_token` reads Clowk's cookie instead, which is where an API-only app has
-always read it from. Sessions written before the switch are pruned on their next
+always read it from. Sessions written before the upgrade are pruned on their next
 request, so an app does not have to wait for everyone to sign out.
 
-The default stays `:app` so an upgrade changes nothing until you ask.
+Ask for `:app` if the app reads the token out of `session[...]` itself rather
+than through `current_token`.
 
 ### Token verification
 

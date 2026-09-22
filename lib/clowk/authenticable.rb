@@ -98,8 +98,8 @@ module Clowk
     end
 
     # The session first, which holds a copy only under token_store :app —
-    # and, for one request after an app switches to :clowk, in a session
-    # written before the switch. drop_mirrored_token! clears those. Clowk's own
+    # and, for one request after an app drops that setting, in a session
+    # written before the change. drop_mirrored_token! clears those. Clowk's own
     # cookie is the source either way.
     def current_token
       stored_session&.dig("token") || extracted_token
@@ -321,7 +321,7 @@ module Clowk
       claims = {user: payload, signed_in_at: Time.now.to_i}
 
       store[Clowk.config.session_key] =
-        (Clowk.config.token_store == :clowk) ? claims : claims.merge(token:)
+        (Clowk.config.token_store == :app) ? claims.merge(token:) : claims
 
       clowk_cookie_jar&.[]=(Clowk.config.cookie_key, {
         value: token,
@@ -333,11 +333,11 @@ module Clowk
 
     # A session written under :app still carries the token, and
     # persist_clowk_session does not run again while that session stands — so
-    # without this, switching an app to :clowk would shrink nothing until every
+    # without this, an app that drops :app would shrink nothing until every
     # person signed out and back in. Drops the copy once, on the first request
-    # after the switch.
+    # after the change.
     def drop_mirrored_token!
-      return unless Clowk.config.token_store == :clowk
+      return if Clowk.config.token_store == :app
 
       store = clowk_session_store
       held = stored_session

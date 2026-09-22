@@ -66,29 +66,26 @@ module Clowk
       # the next request; max_session_age is what bounds that.
       @fail_open_on_broker_error = true
 
-      # Whose cookie keeps the token for the next request: :app or :clowk.
-      #
-      # Both are cookies — that is why the setting names the OWNER rather than
-      # the mechanism. :clowk is this gem's own cookie; :app is the Rails
-      # session, which is itself one cookie carrying everything the app puts in
-      # `session[...]`.
+      # Whether the token is ALSO mirrored into the host app's Rails session:
+      # nil for no, :app for yes.
       #
       # Clowk's own cookie is written either way — it is what `current_token`
       # reads when the session has none, and the only place an API-only app has
-      # ever had. The setting decides whether a COPY is also mirrored into the
-      # app's Rails session, as every version before 0.9 did.
+      # ever had. That is why nil is not "nowhere": it is Clowk's cookie alone.
       #
-      # That copy is not free. A Rails session lives in ONE cookie with about
-      # 4096 bytes to its name, and in production, where tokens are RS256, the
-      # token is most of what a session weighs. Hand a browser more than it will
-      # hold and it discards the whole cookie in silence: no error server-side,
-      # none in the console, the previous cookie simply stays. Everything written
-      # on that request goes with it — a flash message, a selected tenant — which
-      # reads as a button that does nothing.
+      # The copy is not free, which is why nil is the default. A Rails session
+      # lives in ONE cookie with about 4096 bytes to its name, and in
+      # production, where tokens are RS256, the token is most of what a session
+      # weighs. Hand a browser more than it will hold and it discards the whole
+      # cookie in silence: no error server-side, none in the console, the
+      # previous cookie simply stays. Everything written on that request goes
+      # with it — a flash message, a selected tenant — which reads as a button
+      # that does nothing. An app pays that risk on every request to keep a copy
+      # of a token it already has.
       #
-      # :session stays the default so an upgrade changes nothing until an app
-      # asks for :cookie.
-      @token_store = :app
+      # :app is there for an app that reads the token out of `session[...]`
+      # itself, rather than through `current_token`.
+      @token_store = nil
     end
 
     # Where API-only apps cache session status, since they have no Rails session
