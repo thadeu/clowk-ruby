@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-09-21
+
+### Changed
+
+- **`token_store` no longer mirrors the token into the app's session by default, and `:clowk` is
+  gone — the value is `nil` or `:app`.** Clowk writes its own cookie whatever the setting says, so
+  the only question the setting ever answered was whether a COPY also goes into the host app's
+  Rails session. `nil` says no, `:app` says yes, and nothing else is a valid value.
+
+  ```ruby
+  config.token_store = nil   # Clowk's own cookie, and nowhere else (the default)
+  config.token_store = :app  # also mirrored into the app's Rails session
+  ```
+
+  The copy was the default for every version up to 0.9.1, and it is the one that can break an app
+  in silence: a Rails session is ONE cookie of about 4096 bytes, an RS256 token is most of what one
+  weighs, and a browser handed more than it will hold discards the whole cookie without a word —
+  flash message, selected tenant, CSRF rotation and all. An app should not pay that on every
+  request to keep a second copy of a token Clowk's own cookie already carries.
+
+### Upgrading
+
+Most apps do nothing. `current_token`, `current_clowk` and `clowk_signed_in?` read the same values
+as before, and sessions written under the old default are pruned on their next request.
+
+An app that reads the token out of `session[...]` itself, rather than through `current_token`, must
+ask for the copy:
+
+```ruby
+Clowk.configure { |config| config.token_store = :app }
+```
+
+An app already on `:clowk` (0.9.x only) changes that value to `nil`, or removes the line.
+
 ## [0.9.1] - 2026-09-21
 
 ### Changed
