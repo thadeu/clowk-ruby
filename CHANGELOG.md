@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-11-07
+
+### Added
+
+- **Sessions last as long as the Clowk instance says.** The callback trades the sign-in token for
+  an access + refresh pair (`POST /sessions/exchange`). Both are kept in httponly cookies that
+  expire when the Clowk session ends, and an expired access token is renewed on the next request
+  with no redirect. Before this, the cookie had no expiry, so a browser restart or a stopped PWA
+  signed the user out, and the one-hour access token did the same even when the cookie lived.
+- `config.refresh_tokens` (default `true`), `config.refresh_cookie_key` (default
+  `"clowk_refresh_token"`) and `config.refresh_skew` (default `60` seconds).
+- `Clowk::SDK::SessionToken` (`client.session_tokens.exchange / refresh / revoke`).
+- `Clowk::TokenRefresher`: one rotation per refresh token, shared through
+  `config.session_status_cache`, so a page and its Turbo frames do not spend the same refresh
+  token twice.
+
+### Changed
+
+- `clowk_sign_out!` revokes the session on Clowk (best effort) and deletes the refresh cookie.
+  Pass `revoke: false` to only clear the local state.
+- `current_token` returns a renewed token when the stored one has expired.
+- The stored session keeps the end of the Clowk session (`expires_at`). Past it, the local
+  session ends even when the app's own session cookie lives on.
+- Without a refresh token, the `clowk_token` cookie lives as long as the token instead of until
+  the browser closes.
+
+### Upgrading
+
+Set `config.publishable_key` (most apps already do) and use a cache shared by all processes for
+`config.session_status_cache` (`Rails.cache` with Solid Cache or Redis). Give the app's session
+store an `expire_after` equal to the Clowk session lifetime. Needs a Clowk server that sends
+`refresh_expires_in`; with an older one the cookies live 7 days.
+
 ## [0.10.0] - 2026-09-21
 
 ### Changed
