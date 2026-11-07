@@ -781,4 +781,19 @@ RSpec.describe Clowk::Authenticable do
       expect(seen.size).to eq(2)
     end
   end
+
+  describe "session end from Clowk" do
+    it "keeps the session before the end Clowk gave" do
+      instance = dummy_class.new(session_data: {user: payload, expires_at: Time.now.to_i + 3600}, request: request)
+
+      expect(instance.clowk_signed_in?).to be(true)
+    end
+
+    it "ends the session after the end Clowk gave, even when the app session lives on" do
+      instance = dummy_class.new(session_data: {user: payload, expires_at: Time.now.to_i - 1}, request: request)
+
+      expect(instance.clowk_signed_in?).to be(false)
+      expect(instance.session[Clowk.config.session_key]).to be_nil
+    end
+  end
 end

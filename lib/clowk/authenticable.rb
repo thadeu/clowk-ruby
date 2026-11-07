@@ -12,6 +12,10 @@ module Clowk
     # must not be swallowed into "the session is probably fine".
     BROKER_UNAVAILABLE = [SystemCallError, Timeout::Error, IOError, SocketError, EOFError].freeze
 
+    # How long the cookies live when Clowk does not say (a server older than
+    # refresh_expires_in). Clowk's own default session lifetime.
+    FALLBACK_SESSION_LIFETIME = 7 * 24 * 60 * 60
+
     def self.install_dynamic_methods(base)
       scope = Clowk.config.prefix_by.to_s
       current_method = :"current_#{scope}"
@@ -89,6 +93,8 @@ module Clowk
 
     def clowk_current_resource
       @clowk_current_resource ||= begin
+        clowk_end_lapsed_session!
+
         payload = stored_user_payload || verified_request_payload
 
         drop_mirrored_token!
@@ -101,8 +107,13 @@ module Clowk
     # and, for one request after an app drops that setting, in a session
     # written before the change. drop_mirrored_token! clears those. Clowk's own
     # cookie is the source either way.
+    #
+    # An expired token is renewed with the refresh cookie before it is handed
+    # out, so an API call or a session check never carries a dead token.
     def current_token
-      stored_session&.dig("token") || extracted_token
+      token = stored_session&.dig("token") || extracted_token
+
+      clowk_refresh_due?(token) ? clowk_fresh_token : token
     end
 
     def clowk_signed_in?
@@ -175,9 +186,14 @@ module Clowk
       clowk_current_resource
     end
 
-    def clowk_sign_out!
+    # @param revoke [Boolean] also end the session on Clowk, so the refresh
+    #   token cannot sign anyone in again
+    def clowk_sign_out!(revoke: true)
+      Clowk::TokenRefresher.new.revoke(clowk_refresh_cookie) if revoke
+
       clowk_session_store&.delete(Clowk.config.session_key)
       clowk_cookie_jar&.delete(Clowk.config.cookie_key)
+      clowk_cookie_jar&.delete(Clowk.config.refresh_cookie_key)
 
       @clowk_current_resource = nil
     end
@@ -277,14 +293,130 @@ module Clowk
     end
 
     def verified_request_payload
-      return unless extracted_token
+      token = clowk_refresh_due?(extracted_token) ? clowk_fresh_token : extracted_token
 
-      payload = Clowk::JwtVerifier.new.verify(extracted_token)
-      persist_clowk_session(extracted_token, payload)
+      return unless token
+
+      payload = Clowk::JwtVerifier.new.verify(token)
+
+      persist_clowk_session(token, payload)
 
       payload
     rescue Clowk::InvalidTokenError
       nil
+    end
+
+    # Trades the sign-in token for an access + refresh pair, so the session
+    # lasts what the Clowk instance configures. Falls back to the sign-in
+    # token alone when there is no publishable key, the token has no session,
+    # or Clowk cannot be reached.
+    def clowk_exchange_sign_in_token(token)
+      return token unless Clowk.config.refresh_tokens && clowk_cookie_jar
+
+      pair = Clowk::TokenRefresher.new.exchange(token)
+
+      return token unless pair
+
+      clowk_adopt_token_pair!(pair)
+
+      pair[:access_token]
+    rescue Clowk::InvalidTokenError, *BROKER_UNAVAILABLE => e
+      Clowk.config.http_logger&.warn("[Clowk] token exchange skipped: #{e.class}: #{e.message}")
+
+      token
+    end
+
+    def clowk_refresh_due?(token)
+      return false unless Clowk.config.refresh_tokens
+      return false if clowk_refresh_cookie.blank?
+      return true if token.blank?
+
+      expires_at = clowk_token_expiry(token)
+
+      expires_at.nil? || expires_at - Clowk.config.refresh_skew.to_i <= Time.now.to_i
+    end
+
+    # A refused refresh means the session is over on Clowk (revoked, past its
+    # lifetime, idle), so the local one ends too. An unreachable Clowk is not
+    # an answer: the cookies stay for the next request.
+    def clowk_fresh_token
+      return @clowk_fresh_token if defined?(@clowk_fresh_token)
+
+      @clowk_fresh_token = begin
+        pair = Clowk::TokenRefresher.new.refresh(clowk_refresh_cookie)
+
+        clowk_adopt_token_pair!(pair)
+
+        pair[:access_token]
+      rescue Clowk::InvalidTokenError
+        clowk_sign_out!(revoke: false)
+
+        nil
+      rescue *BROKER_UNAVAILABLE => e
+        Clowk.config.http_logger&.warn("[Clowk] token refresh unavailable: #{e.class}: #{e.message}")
+
+        extracted_token
+      end
+    end
+
+    # Both cookies end when the Clowk session ends. A cookie with no expiry is
+    # deleted when the browser closes, and an installed PWA closes each time
+    # the OS stops it.
+    def clowk_adopt_token_pair!(pair)
+      expires_at = Time.now + (pair[:refresh_expires_in].presence || FALLBACK_SESSION_LIFETIME).to_i
+
+      @clowk_session_expires_at = expires_at
+
+      clowk_write_cookie(Clowk.config.cookie_key, pair[:access_token], expires_at)
+      clowk_write_cookie(Clowk.config.refresh_cookie_key, pair[:refresh_token], expires_at) if pair[:refresh_token].present?
+
+      held = stored_session
+      store = clowk_session_store
+
+      return if held.nil? || store.nil?
+
+      updated = held.merge("expires_at" => expires_at.to_i)
+      updated["token"] = pair[:access_token] if Clowk.config.token_store == :app
+
+      store[Clowk.config.session_key] = updated
+    end
+
+    def clowk_write_cookie(key, value, expires_at)
+      clowk_cookie_jar&.[]=(key, {
+        value: value,
+        expires: expires_at,
+        httponly: true,
+        same_site: :lax,
+        secure: clowk_secure_request?
+      })
+    end
+
+    def clowk_secure_request?
+      request.respond_to?(:ssl?) && request.ssl?
+    end
+
+    def clowk_refresh_cookie
+      clowk_cookie_jar&.[](Clowk.config.refresh_cookie_key).presence
+    end
+
+    def clowk_token_expiry(token)
+      JWT.decode(token, nil, false).first["exp"]&.to_i
+    rescue JWT::DecodeError
+      nil
+    end
+
+    # The stored session carries the end of the Clowk session. Past it, the
+    # local session ends too, even when the host app's session cookie lives on.
+    def clowk_end_lapsed_session!
+      held = stored_session
+
+      return if held.nil?
+
+      expires_at = (held["expires_at"] || held[:expires_at]).to_i
+
+      return unless expires_at.positive? && expires_at <= Time.now.to_i
+
+      clowk_sign_out!(revoke: false)
     end
 
     # Bearer header or cookie only — never the query string. A valid token in a
@@ -319,16 +451,21 @@ module Clowk
       return if store.nil?
 
       claims = {user: payload, signed_in_at: Time.now.to_i}
+      claims[:expires_at] = @clowk_session_expires_at.to_i if @clowk_session_expires_at
 
       store[Clowk.config.session_key] =
         (Clowk.config.token_store == :app) ? claims.merge(token:) : claims
 
-      clowk_cookie_jar&.[]=(Clowk.config.cookie_key, {
-        value: token,
-        httponly: true,
-        same_site: :lax,
-        secure: request.ssl?
-      })
+      return if @clowk_session_expires_at
+
+      clowk_write_cookie(Clowk.config.cookie_key, token, clowk_token_cookie_expiry(token))
+    end
+
+    # Without a refresh token the cookie lives as long as the token does.
+    def clowk_token_cookie_expiry(token)
+      expires_at = clowk_token_expiry(token)
+
+      expires_at ? Time.at(expires_at) : nil
     end
 
     # A session written under :app still carries the token, and

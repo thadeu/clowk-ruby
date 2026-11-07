@@ -28,6 +28,9 @@ module Clowk
     attr_accessor :max_session_age
     attr_accessor :fail_open_on_broker_error
     attr_accessor :token_store
+    attr_accessor :refresh_tokens
+    attr_accessor :refresh_cookie_key
+    attr_accessor :refresh_skew
     attr_writer :session_status_cache
 
     def initialize
@@ -86,6 +89,21 @@ module Clowk
       # :app is there for an app that reads the token out of `session[...]`
       # itself, rather than through `current_token`.
       @token_store = nil
+
+      # Keeps the user signed in for the session lifetime the Clowk instance
+      # configures (7 days, 30 days, whatever the dashboard says), not for the
+      # one hour an access token lives.
+      #
+      # On sign-in the callback trades the token for an access + refresh pair.
+      # Both go into cookies that expire when the Clowk session ends, so they
+      # survive a closed browser or a stopped PWA. An expired access token is
+      # renewed on the next request, without a redirect. Needs the publishable
+      # key; without one the gem keeps only the sign-in token, as before.
+      @refresh_tokens = true
+      @refresh_cookie_key = "clowk_refresh_token"
+
+      # Renew the access token this many seconds before it expires.
+      @refresh_skew = 60
     end
 
     # Where API-only apps cache session status, since they have no Rails session

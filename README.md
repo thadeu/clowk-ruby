@@ -299,6 +299,47 @@ request, so an app does not have to wait for everyone to sign out.
 Ask for `:app` if the app reads the token out of `session[...]` itself rather
 than through `current_token`.
 
+### How long a session lasts
+
+The Clowk instance decides. Set the session lifetime in the dashboard (7 days,
+30 days) and the app keeps the user signed in for exactly that long, also in an
+installed PWA that the OS stops and starts again.
+
+```ruby
+config.publishable_key = ENV["CLOWK_PUBLISHABLE_KEY"] # required for refresh tokens
+config.refresh_tokens = true                           # default
+config.refresh_cookie_key = "clowk_refresh_token"      # default
+config.refresh_skew = 60                               # seconds, default
+```
+
+1. The callback trades the sign-in token for an access token and a refresh
+   token (`POST /sessions/exchange`).
+2. Both go into httponly cookies that expire when the Clowk session ends. A
+   cookie with no expiry is deleted when the browser closes, and a PWA closes
+   each time the OS stops it. That was why a PWA lost its session in hours.
+3. When the access token expires (or the app session cookie is gone), the next
+   request renews it with the refresh cookie. There is no redirect.
+4. When Clowk refuses the refresh (revoked, past the lifetime, idle timeout),
+   the local session ends and the user goes to sign-in. When Clowk cannot be
+   reached, the cookies stay and the next request tries again.
+5. `clowk_sign_out!` revokes the session on Clowk too.
+
+Refresh tokens rotate: each one works once. A page and its Turbo frames can
+arrive together with the same expired token, so one request rotates and the
+others take its result from `config.session_status_cache` (`Rails.cache` by
+default). Use a cache all app processes share (Solid Cache, Redis, Memcached).
+
+Also give the app's own session cookie an expiry, so the app does not need a
+refresh each time the PWA opens:
+
+```ruby
+# config/initializers/session_store.rb
+Rails.application.config.session_store :cookie_store, key: "_myapp_session", expire_after: 30.days
+```
+
+Without a publishable key, or with `config.refresh_tokens = false`, the gem keeps
+only the sign-in token, in a cookie that lives as long as the token.
+
 ### Token verification
 
 Tokens signed with `RS256` are verified against Clowk's public key set, fetched

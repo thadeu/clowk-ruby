@@ -13,6 +13,9 @@ module Clowk
       return_to = flow["return_to"]
 
       reset_clowk_session!
+
+      token = clowk_exchange_sign_in_token(token)
+
       persist_clowk_session(token, payload)
 
       redirect_back_or(Clowk.config.after_sign_in_path, return_to:)

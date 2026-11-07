@@ -9,4 +9,5 @@ ClowkSpecApp.routes.draw do
   get "/after_sign_out", to: ->(_env) { [200, {"Content-Type" => "text/plain"}, ["after_sign_out"]] }
 
   get "/api/me", to: "clowk_spec_api#show"
+  get "/private", to: "clowk_spec_pages#show"
 end
